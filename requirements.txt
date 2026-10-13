@@ -1,0 +1,6 @@
+tensorflow==2.21.0
+scikit-learn>=1.5,<2
+matplotlib>=3.9,<4
+pillow>=10,<13
+ipykernel>=6,<8
+nbformat>=5,<6
