@@ -4,3 +4,5 @@
 __pycache__/
 .ipynb_checkpoints/
 modelos/
+resultados_preentrenados/
+evaluacion_nueva/
