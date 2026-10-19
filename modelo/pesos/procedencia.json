@@ -1,0 +1,7 @@
+{
+  "checkpoint": "benchmarks/resmasking_net",
+  "url": "https://huggingface.co/phamquiluan/ResidualMaskingNetwork/resolve/main/benchmarks/resmasking_net?download=true",
+  "sha256": "5bd51cff4ad2f4e5ee34fd9a1fb838ebac606e22bd85475947fd746b749efe87",
+  "codigo_commit": "914161802774528ed827bf0edd95795dfe1969c5",
+  "accuracy_publicada_fer2013": 74.14
+}

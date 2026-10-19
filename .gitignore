@@ -3,4 +3,4 @@ __pycache__/
 *.py[cod]
 .tmp/
 .ipynb_checkpoints/
-modelos/
+modelo/pesos/*.pth

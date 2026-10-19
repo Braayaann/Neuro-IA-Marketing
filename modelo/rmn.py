@@ -16,7 +16,7 @@ class ClasificadorRMN:
     def __init__(self):
         from rmn_autores.resmasking import resmasking, resmasking_dropout1
         torch.set_num_threads(4)
-        ruta = BASE / 'modelos' / 'rmn_benchmark' / 'resmasking_net.pth'
+        ruta = BASE / 'pesos' / 'resmasking_net.pth'
         with ruta.open('rb') as archivo:
             if hashlib.file_digest(archivo, 'sha256').hexdigest() != SHA256:
                 raise ValueError('El checkpoint no coincide con el original publicado.')
