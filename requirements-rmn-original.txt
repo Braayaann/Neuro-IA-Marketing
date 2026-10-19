@@ -1,3 +1,0 @@
--r requirements-preentrenados.txt
-torch>=2.6,<3
-opencv-python>=4.10,<5

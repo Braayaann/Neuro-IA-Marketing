@@ -6,3 +6,5 @@ __pycache__/
 modelos/
 resultados_preentrenados/
 evaluacion_nueva/
+train/
+test/
