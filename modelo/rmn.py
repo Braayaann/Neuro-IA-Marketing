@@ -14,9 +14,14 @@ SHA256 = '5bd51cff4ad2f4e5ee34fd9a1fb838ebac606e22bd85475947fd746b749efe87'
 
 class ClasificadorRMN:
     def __init__(self):
-        from rmn_autores.resmasking import resmasking, resmasking_dropout1
+        if __package__:
+            from .rmn_autores.resmasking import resmasking, resmasking_dropout1
+        else:
+            from rmn_autores.resmasking import resmasking, resmasking_dropout1
         torch.set_num_threads(4)
         ruta = BASE / 'pesos' / 'resmasking_net.pth'
+        if not ruta.is_file():
+            raise FileNotFoundError(f'Faltan los pesos RMN: {ruta}. Consulta modelo/README.md para descargarlos.')
         with ruta.open('rb') as archivo:
             if hashlib.file_digest(archivo, 'sha256').hexdigest() != SHA256:
                 raise ValueError('El checkpoint no coincide con el original publicado.')
@@ -58,7 +63,7 @@ def detectar(detector, imagen):
     return detector.detectMultiScale(gris, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modos = parser.add_subparsers(dest='modo', required=True)
     foto = modos.add_parser('foto', help='Clasificar una foto local.')
@@ -66,7 +71,7 @@ def main():
     foto.add_argument('--recortado', action='store_true', help='La foto ya contiene solo una cara.')
     camara = modos.add_parser('camara', help='Probar cámara local sin grabar ni subir video.')
     camara.add_argument('--indice', type=int, default=0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     modelo = ClasificadorRMN()
     detector = crear_detector()
     if args.modo == 'foto':
