@@ -1,1 +1,2 @@
--r modelo/requirements.txt
+-r emociones/requirements.txt
+-r mirada/requirements.txt

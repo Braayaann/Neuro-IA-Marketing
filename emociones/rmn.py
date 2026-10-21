@@ -13,15 +13,15 @@ SHA256 = '5bd51cff4ad2f4e5ee34fd9a1fb838ebac606e22bd85475947fd746b749efe87'
 
 
 class ClasificadorRMN:
-    def __init__(self):
+    def __init__(self, ruta=None):
         if __package__:
             from .rmn_autores.resmasking import resmasking, resmasking_dropout1
         else:
             from rmn_autores.resmasking import resmasking, resmasking_dropout1
         torch.set_num_threads(4)
-        ruta = BASE / 'pesos' / 'resmasking_net.pth'
+        ruta = Path(ruta) if ruta is not None else BASE / 'pesos' / 'resmasking_net.pth'
         if not ruta.is_file():
-            raise FileNotFoundError(f'Faltan los pesos RMN: {ruta}. Consulta modelo/README.md para descargarlos.')
+            raise FileNotFoundError(f'Faltan los pesos RMN: {ruta}. Ejecuta python emociones/recuperar_pesos.py.')
         with ruta.open('rb') as archivo:
             if hashlib.file_digest(archivo, 'sha256').hexdigest() != SHA256:
                 raise ValueError('El checkpoint no coincide con el original publicado.')

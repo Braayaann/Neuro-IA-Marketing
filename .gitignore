@@ -3,4 +3,6 @@ __pycache__/
 *.py[cod]
 .tmp/
 .ipynb_checkpoints/
-modelo/pesos/*.pth
+emociones/pesos/*.pth
+mirada/pesos/*.pkl*
+mirada/resultados/
