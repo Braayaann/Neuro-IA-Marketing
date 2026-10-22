@@ -14,7 +14,7 @@ el informe histórico de la primera etapa, cuando todavía faltaban los pesos.
 
 ## Instalar y ejecutar en Windows
 
-Abre **esta carpeta `neuro-ia-marketing`** en VS Code. Se verificó el entorno con
+Abre **la carpeta de este repositorio** en VS Code. Se verificó el entorno con
 Python **3.11.9 x64**. Desde PowerShell, para una instalación nueva:
 
 ```powershell
@@ -25,8 +25,7 @@ py -3.11 -m venv .venv
 ```
 
 No necesitas activar el entorno. Selecciona `.venv\Scripts\python.exe` mediante
-**Python: Select Interpreter** de VS Code. El entorno `.venv` de la carpeta superior
-es distinto: utiliza el de `neuro-ia-marketing`.
+**Python: Select Interpreter** de VS Code. Usa siempre el entorno `.venv` de esta misma carpeta del repositorio.
 
 Dependencias directas: MediaPipe 0.10.21, opencv-contrib-python 4.11.0.86, NumPy 1.26.4
 y PyTorch 2.14.1+cpu. Las tres primeras permanecen como en la base; PyTorch conserva
