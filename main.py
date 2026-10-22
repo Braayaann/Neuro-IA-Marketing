@@ -1,5 +1,8 @@
-"""Cámara y landmarks faciales con la API Tasks de MediaPipe."""
+"""Cámara, MediaPipe Tasks y expresiones RMN, sin almacenar imágenes por defecto."""
 
+import argparse
+from collections import deque
+from pathlib import Path
 import time
 
 import cv2
@@ -9,6 +12,9 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 import config
+from emociones.rmn_detector import CLASES, ClasificadorRMN
+from utilidades.procesamiento_imagen import GuardadorRecortes, preparar_rostros
+from utilidades.rendimiento import Mediciones
 
 
 def validar_configuracion():
@@ -30,6 +36,16 @@ def validar_configuracion():
         valor = getattr(config, nombre)
         if not isinstance(valor, (int, float)) or not 0 <= valor <= 1:
             raise ValueError(f"{nombre} debe estar entre 0 y 1.")
+    for nombre in ('HILOS_RMN', 'TAMANO_LOTE_RMN', 'MINIMO_ROSTRO',
+                   'MAX_RECORTES', 'INTERVALO_RECORTES'):
+        if type(getattr(config, nombre)) is not int or getattr(config, nombre) < 1:
+            raise ValueError(f'{nombre} debe ser un entero positivo.')
+    if type(config.ANCHO_PROCESAMIENTO) is not int or config.ANCHO_PROCESAMIENTO < 0:
+        raise ValueError('ANCHO_PROCESAMIENTO debe ser 0 o un entero positivo.')
+    if not 0 <= config.MARGEN_ROSTRO <= 0.5:
+        raise ValueError('MARGEN_ROSTRO debe estar entre 0 y 0.5.')
+    if not 0 < config.FRACCION_VISIBLE <= 1:
+        raise ValueError('FRACCION_VISIBLE debe estar entre 0 (exclusivo) y 1.')
 
 
 def crear_detector():
@@ -68,6 +84,13 @@ def abrir_camara():
 
 def detectar_rostros(detector, fotograma_bgr, timestamp_ms):
     """Devuelve el resultado completo, incluidos los landmarks normalizados."""
+    ancho_objetivo = config.ANCHO_PROCESAMIENTO
+    alto, ancho = fotograma_bgr.shape[:2]
+    if 0 < ancho_objetivo < ancho:
+        fotograma_bgr = cv2.resize(fotograma_bgr,
+                                  (ancho_objetivo, max(1, round(alto * ancho_objetivo / ancho))),
+                                  interpolation=cv2.INTER_AREA)
+    # Solo MediaPipe recibe RGB. RMN recorta el BGR original a resolución completa.
     fotograma_rgb = cv2.cvtColor(fotograma_bgr, cv2.COLOR_BGR2RGB)
     imagen = mp.Image(image_format=mp.ImageFormat.SRGB, data=fotograma_rgb)
     return detector.detect_for_video(imagen, timestamp_ms)
@@ -92,8 +115,9 @@ def escribir_texto(imagen, texto, posicion, color=(255, 255, 255)):
                 0.55, color, 1, cv2.LINE_AA)
 
 
-def dibujar_rostros(imagen, rostros, mostrar_landmarks):
+def dibujar_rostros(imagen, rostros, mostrar_landmarks, etiquetas=None, recortes=None):
     alto, ancho = imagen.shape[:2]
+    ocupadas = []
     for numero, landmarks in enumerate(rostros, start=1):
         puntos, (x1, y1, x2, y2) = obtener_puntos_y_limites(landmarks, ancho, alto)
         if mostrar_landmarks:
@@ -105,81 +129,180 @@ def dibujar_rostros(imagen, rostros, mostrar_landmarks):
         if config.MOSTRAR_RECTANGULOS:
             cv2.rectangle(imagen, (x1, y1), (x2, y2), (255, 180, 40), 1)
         # Este número solo identifica la posición del rostro en el fotograma.
-        escribir_texto(imagen, f"Rostro {numero}", (x1, max(18, y1 - 8)),
-                       color=(255, 180, 40))
+        texto = f"{numero}: {etiquetas[numero - 1]}" if etiquetas else f"Rostro {numero}"
+        if recortes and recortes[numero - 1].caja and config.MOSTRAR_RECTANGULOS:
+            a, b, c, d = recortes[numero - 1].caja
+            cv2.rectangle(imagen, (a, b), (c - 1, d - 1), (70, 220, 220), 1)
+        ancho_texto = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)[0][0]
+        tx = max(0, min(x1, ancho - ancho_texto - 2))
+        candidatos = [max(18, y1 - 8), min(alto - 5, y2 + 22)]
+        candidatos.extend(range(18, alto - 4, 22))
+        ty = candidatos[0]
+        for candidato in candidatos:
+            caja = (tx, candidato - 17, tx + ancho_texto, candidato + 4)
+            if all(caja[2] < a or caja[0] > c or caja[3] < b or caja[1] > d
+                   for a, b, c, d in ocupadas):
+                ty = candidato
+                break
+        ocupadas.append((tx, ty - 17, tx + ancho_texto, ty + 4))
+        cv2.line(imagen, (x1, y1), (tx, ty), (255, 180, 40), 1)
+        escribir_texto(imagen, texto, (tx, ty), color=(255, 180, 40))
 
 
-def mostrar_informacion(imagen, cantidad, fps, mostrar_landmarks):
+def mostrar_informacion(imagen, cantidad, fps, mostrar_landmarks, activo, tiempos):
     alto, ancho = imagen.shape[:2]
-    escribir_texto(imagen, f"Rostros: {cantidad} | FPS: {fps:.1f}", (10, 24))
-    escribir_texto(imagen, f"Resolucion: {ancho} x {alto}", (10, 48))
+    # Panel fuera del video para no cubrir los rostros con las métricas.
+    imagen = cv2.copyMakeBorder(imagen, 0, 120, 0, max(0, 680 - ancho),
+                                cv2.BORDER_CONSTANT, value=(25, 25, 25))
+    escribir_texto(imagen, f"Rostros: {cantidad} | FPS: {fps:.1f} | {ancho} x {alto}", (10, alto + 22))
     estado = "ON" if mostrar_landmarks else "OFF"
-    escribir_texto(imagen, f"Q: salir | M: landmarks {estado}", (10, 72))
+    escribir_texto(imagen, f"Q: salir | M: puntos {estado} | R: RMN {'ON' if activo else 'OFF'}",
+                   (10, alto + 44))
+    escribir_texto(imagen, 'ms previos: ' + ' | '.join(
+        f'{nombre} {tiempos.get(clave, 0):.1f}' for nombre, clave in
+        [('Capt', 'captura'), ('MP', 'mediapipe'), ('Prep', 'preparacion'), ('RMN', 'rmn')]),
+        (10, alto + 66))
+    escribir_texto(imagen, f"Visual {tiempos.get('visualizacion', 0):.1f} | "
+                   f"Ciclo {tiempos.get('ciclo', 0):.1f} | Expresion estimada, no emocion real",
+                   (10, alto + 88))
+    escribir_texto(imagen, 'Rectangulo azul: landmarks | amarillo: recorte RMN', (10, alto + 110))
+    return imagen
 
 
-def ejecutar_video(detector, camara):
+def ejecutar_video(detector, camara, clasificador=None, max_fotogramas=0,
+                   sin_ventana=False, mediciones=None):
     mostrar_landmarks = config.MOSTRAR_LANDMARKS
+    activo = clasificador is not None
+    mediciones = mediciones if mediciones is not None else Mediciones()
+    guardador = GuardadorRecortes(config.GUARDAR_RECORTES, config.CARPETA_RECORTES,
+                                 config.MAX_RECORTES, config.INTERVALO_RECORTES)
     inicio_ns = time.monotonic_ns()
     timestamp_anterior = -1
-    inicio_medicion = time.perf_counter()
-    fotogramas_medidos = 0
-    fps = 0.0
-
-    cv2.namedWindow(config.NOMBRE_VENTANA, cv2.WINDOW_NORMAL)
-    print("Cámara iniciada. Enfoca la ventana de video: Q para salir, M para los puntos.")
+    ciclos = deque(maxlen=30)
+    tiempos_anteriores = {}
+    numero_frame = 0
+    if not sin_ventana:
+        cv2.namedWindow(config.NOMBRE_VENTANA, cv2.WINDOW_NORMAL)
+    print('Cámara iniciada. Q: salir, M: puntos, R: alternar RMN si está cargado.')
     while True:
+        inicio = time.perf_counter()
         recibido, fotograma = camara.read()
         if not recibido or fotograma is None or fotograma.size == 0:
             raise RuntimeError("No se pudo leer un fotograma. Comprueba la conexión de la cámara.")
+        fin_captura = time.perf_counter()
 
         # VIDEO exige milisegundos estrictamente crecientes, incluso entre frames rápidos.
         transcurrido_ms = (time.monotonic_ns() - inicio_ns) // 1_000_000
         timestamp_ms = max(transcurrido_ms, timestamp_anterior + 1)
         timestamp_anterior = timestamp_ms
         resultado = detectar_rostros(detector, fotograma, timestamp_ms)
-
-        # El original y los landmarks siguen disponibles para futuras etapas.
-        visualizacion = fotograma.copy()
-        dibujar_rostros(visualizacion, resultado.face_landmarks, mostrar_landmarks)
-
-        fotogramas_medidos += 1
-        ahora = time.perf_counter()
-        intervalo = ahora - inicio_medicion
-        if intervalo >= 0.5:
-            fps = fotogramas_medidos / intervalo
-            fotogramas_medidos = 0
-            inicio_medicion = ahora
-        mostrar_informacion(visualizacion, len(resultado.face_landmarks), fps,
-                            mostrar_landmarks)
-        cv2.imshow(config.NOMBRE_VENTANA, visualizacion)
-        tecla = cv2.waitKey(1) & 0xFF
+        fin_deteccion = time.perf_counter()
+        etiquetas = ['RMN OFF'] * len(resultado.face_landmarks)
+        recortes, indices, tensor = [], [], None
+        if activo:
+            recortes, indices, imagenes = preparar_rostros(
+                fotograma, resultado.face_landmarks, margen=config.MARGEN_ROSTRO,
+                minimo=config.MINIMO_ROSTRO, fraccion_visible=config.FRACCION_VISIBLE)
+            etiquetas = [r.motivo or 'sin clasificar' for r in recortes]
+            tensor = clasificador.preparar(imagenes)
+            # Incluir transferencia CPU→GPU en preparación; delimitar CUDA realmente.
+            clasificador.sincronizar()
+        fin_preparacion = time.perf_counter()
+        if activo and indices:
+            scores = clasificador.inferir(tensor)
+            clasificador.sincronizar()
+            for indice, probabilidades in zip(indices, scores):
+                clase = int(probabilidades.argmax())
+                etiquetas[indice] = f'{CLASES[clase]} {probabilidades[clase]:.1%}'
+        fin_rmn = time.perf_counter()
+        guardador.guardar(numero_frame, recortes, indices)
+        fin_depuracion = time.perf_counter()
+        tecla = -1
+        cerrada = False
+        if not sin_ventana:
+            # Dibujar después de inferir: ni landmarks ni textos entran a la red.
+            visualizacion = fotograma.copy()
+            dibujar_rostros(visualizacion, resultado.face_landmarks, mostrar_landmarks,
+                            etiquetas, recortes)
+            fps = 1000 * len(ciclos) / sum(ciclos) if ciclos else 0
+            visualizacion = mostrar_informacion(visualizacion, len(resultado.face_landmarks),
+                                                fps, mostrar_landmarks, activo, tiempos_anteriores)
+            cv2.imshow(config.NOMBRE_VENTANA, visualizacion)
+            tecla = cv2.waitKey(1) & 0xFF
+            cerrada = cv2.getWindowProperty(config.NOMBRE_VENTANA, cv2.WND_PROP_VISIBLE) < 1
+        fin = time.perf_counter()
+        tiempos = dict(captura=(fin_captura - inicio) * 1000,
+                       mediapipe=(fin_deteccion - fin_captura) * 1000,
+                       preparacion=(fin_preparacion - fin_deteccion) * 1000,
+                       rmn=(fin_rmn - fin_preparacion) * 1000,
+                       depuracion=(fin_depuracion - fin_rmn) * 1000,
+                       visualizacion=(fin - fin_depuracion) * 1000,
+                       ciclo=(fin - inicio) * 1000)
+        mediciones.agregar('integrado' if activo else 'mediapipe', len(etiquetas), len(indices), tiempos)
+        ciclos.append(tiempos['ciclo'])
+        tiempos_anteriores = tiempos
+        numero_frame += 1
         if tecla in (ord("q"), ord("Q")):
             break
         if tecla in (ord("m"), ord("M")):
             mostrar_landmarks = not mostrar_landmarks
-        if cv2.getWindowProperty(config.NOMBRE_VENTANA, cv2.WND_PROP_VISIBLE) < 1:
+        if tecla in (ord('r'), ord('R')):
+            if clasificador is not None:
+                activo = not activo
+            else:
+                print('RMN no está cargado. Reinicia sin --solo-mediapipe y con los pesos originales.')
+        if cerrada or (max_fotogramas and numero_frame >= max_fotogramas):
             break
+    return mediciones
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--solo-mediapipe', action='store_true')
+    parser.add_argument('--max-fotogramas', type=int, default=0, help='0: hasta pulsar Q.')
+    parser.add_argument('--sin-ventana', action='store_true', help='Prueba acotada sin dibujar.')
+    parser.add_argument('--mediciones', type=Path, help='Guardar resumen numérico JSON, sin imágenes.')
+    args = parser.parse_args(argv)
+    if args.max_fotogramas < 0 or (args.sin_ventana and args.max_fotogramas == 0):
+        parser.error('--sin-ventana requiere --max-fotogramas positivo.')
     camara = None
+    mediciones = Mediciones()
+    clasificador = None
     try:
         validar_configuracion()
+        if config.RMN_ACTIVO and not args.solo_mediapipe:
+            clasificador = ClasificadorRMN(config.RUTA_RMN, config.DISPOSITIVO_RMN,
+                                           config.HILOS_RMN, config.TAMANO_LOTE_RMN)
+            print(f'RMN cargado en {clasificador.dispositivo}; lote {clasificador.lote}.')
         # El contexto libera los recursos de MediaPipe también ante un error.
         with crear_detector() as detector:
             camara = abrir_camara()
-            ejecutar_video(detector, camara)
+            ejecutar_video(detector, camara, clasificador, args.max_fotogramas,
+                           args.sin_ventana, mediciones)
         return 0
     except KeyboardInterrupt:
         print("\nPrograma detenido por el usuario.")
         return 0
-    except (OSError, ValueError, RuntimeError, cv2.error) as error:
+    except (OSError, ValueError, RuntimeError, ImportError, cv2.error) as error:
         print(f"\nNo se pudo continuar: {error}")
         return 1
     finally:
         if camara is not None:
             camara.release()
         cv2.destroyAllWindows()
+        for fila in mediciones.resumen():
+            print(f"{fila['modo']}: {fila['rostros']} rostros, {fila['clasificados']} clasificados, "
+                  f"{fila['fotogramas']} frames, {fila['fps']:.2f} FPS; "
+                  f"medias ms: {fila['media_ms']}")
+        if args.mediciones:
+            try:
+                mediciones.guardar(args.mediciones, dict(
+                    sin_ventana=args.sin_ventana, dispositivo=str(clasificador.dispositivo)
+                    if clasificador else None, lote=config.TAMANO_LOTE_RMN,
+                    ancho_mediapipe=config.ANCHO_PROCESAMIENTO,
+                    nota='Incluye primer frame; excluye carga de modelos. No mide exactitud.'))
+            except OSError as error:
+                print(f'No se pudo guardar el resumen: {error}')
 
 
 if __name__ == "__main__":

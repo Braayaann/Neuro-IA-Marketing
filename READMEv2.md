@@ -1,5 +1,9 @@
 # Neuro IA Marketing — primera versión
 
+> Documento histórico. La versión integrada y sus instrucciones actuales están en
+> [README.md](README.md). La copia anterior a la integración está en
+> `referencias/mediapipe_original/`.
+
 Prototipo local de aprendizaje: abre una cámara, detecta hasta cinco rostros y dibuja
 los 478 landmarks del modelo Face Landmarker, incluidos ojos e iris. Utiliza la API
 moderna MediaPipe Tasks en modo **VIDEO**, con OpenCV para capturar y mostrar video.

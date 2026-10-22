@@ -3,3 +3,5 @@
 mediapipe==0.10.21
 opencv-contrib-python==4.11.0.86
 numpy==1.26.4
+# Para clasificar, instalar también: python -m pip install -r requirements-rmn.txt
+# No agregar opencv-python: opencv-contrib-python ya proporciona cv2.
