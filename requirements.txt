@@ -1,7 +1,9 @@
-# Python 3.12 x64. OpenCV contrib tambien sirve a RMN y L2CS.
--r emociones/requirements.txt
--r mirada/requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+numpy==1.26.4
+opencv-contrib-python==4.11.0.86
+Pillow>=10,<14
 mediapipe==0.10.21
-# Evitar que JAX requiera NumPy 2 y rompa MediaPipe 0.10.21.
 jax==0.4.38
 jaxlib==0.4.38

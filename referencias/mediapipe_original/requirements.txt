@@ -1,5 +1,0 @@
-# Conjunto de versiones fijado para Python 3.11/3.12 de 64 bits.
-# MediaPipe depende de esta distribución de OpenCV (también se importa como cv2).
-mediapipe==0.10.21
-opencv-contrib-python==4.11.0.86
-numpy==1.26.4
