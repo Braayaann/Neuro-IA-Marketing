@@ -1,0 +1,53 @@
+{
+  ".gitignore": {
+    "sha256": "d144461c5a2f08c6884cf2fdf5e2d4c842e489dbcde7df6d37625e755a68d1de",
+    "copia_identica": true
+  },
+  "README.md": {
+    "sha256": "ed72bd42bf6ef8f8bd67a604e67b23d8baccc1a8a63c49b4180fbaefd76976cf",
+    "copia_identica": true
+  },
+  "requirements.txt": {
+    "sha256": "816edbdfced3429ad931919b3f56878f2318d6a4b7e601f60b3a9b419e73b7f4",
+    "copia_identica": true
+  },
+  "rmn.py": {
+    "sha256": "07b24c04d28f237b8fbd8fcfbdaa99495c6b82aa0262e1f13d1187b09180af1c",
+    "copia_identica": true
+  },
+  "rmn_autores\\LICENSE": {
+    "sha256": "3a08523c293056391f2e03b2aac8f577eb4cbf964f49d4298e3adb2a3ff88a1c",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\masking.py": {
+    "sha256": "2ce98f63e2c948d2965ed167a228546cf911db826a23e9228ac33d78c533765a",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\PROCEDENCIA.md": {
+    "sha256": "3405bc8f87fec1c76a654e6b934ec69d9086e505512d3968f1705c2efab9733d",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\resmasking.py": {
+    "sha256": "6b1a34d9e652c89b984f7346ceabeeb173439917c3497b931144854ce5280884",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\resnet.py": {
+    "sha256": "59499349ed010563bdeb1cdb59e42fb06a97bef62a626f58d0cc5667b742fe16",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\utils.py": {
+    "sha256": "35ea04d924da7b1e6513bfa12124c901885f7a2e756cee5fd7f81ba21e4078c7",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  },
+  "rmn_autores\\__init__.py": {
+    "sha256": "1aaeb823239e03d646d2dbaf1be33ec4c2443fc6aa0a3cc521d7412e0d30b4a4",
+    "copia_identica": true,
+    "arquitectura_integrada_identica": true
+  }
+}

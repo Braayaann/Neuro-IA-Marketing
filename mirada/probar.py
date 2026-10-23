@@ -35,13 +35,15 @@ def texto(canvas, contenido, x, y, escala, color=(245, 245, 245)):
                 escala, color, max(1, int(escala * 2)), cv2.LINE_AA)
 
 
-def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=None, resumen=None, calor=False):
+def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=None, resumen=None, calor=False, emocion=None):
     ancho, alto = config['pantalla_px']
     escala = ancho / 1600
     canvas = np.full((alto, ancho, 3), (24, 20, 18), np.uint8)
     texto(canvas, 'PROTOTIPO SIN VALIDAR - NO MIDE PREFERENCIA', ancho * .03, alto * .055, .75 * escala)
     etiqueta = 'Prueba en curso: sigue la cruz' if objetivo else f'Estimacion: {estado}'
     texto(canvas, etiqueta, ancho * .03, alto * .115, 1.0 * escala, (80, 225, 240))
+    if emocion is not None and objetivo is None:
+        texto(canvas, f'Expresion: {emocion}', ancho*.53, alto*.115, .65*escala)
     texto(canvas, 'Mirada aproximada por zonas | Una persona a 1 m | Camara arriba al centro',
           ancho * .03, alto * .16, .57 * escala, (170, 170, 170))
     for i, nombre in enumerate(('A', 'B')):
@@ -116,10 +118,11 @@ def guardar_prueba(lecturas, config):
     return ruta, informe
 
 
-def guardar_sesion(seguimiento, config):
+def guardar_sesion(seguimiento, config, ruta=None):
     carpeta = BASE / 'resultados'
     carpeta.mkdir(exist_ok=True)
-    ruta = carpeta / datetime.now().strftime('sesion_zonas_%Y%m%d_%H%M%S_%f.json')
+    ruta = Path(ruta) if ruta else carpeta / datetime.now().strftime('sesion_zonas_%Y%m%d_%H%M%S_%f.json')
+    ruta.parent.mkdir(parents=True, exist_ok=True)
     informe = {'tipo': 'tiempo de mirada estimado por zonas, no preferencia',
                'configuracion': config, 'resumen': seguimiento.resumen(),
                'suavizado_segundos': seguimiento.ventana,
@@ -129,12 +132,17 @@ def guardar_sesion(seguimiento, config):
     return ruta
 
 
-def main():
+def main(argv=None, fabrica_emociones=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=BASE/'config.json')
     parser.add_argument('--anuncio-a', type=Path)
     parser.add_argument('--anuncio-b', type=Path)
-    args = parser.parse_args()
+    parser.add_argument('--max-fotogramas', type=int, default=0, help='0: hasta pulsar Q.')
+    parser.add_argument('--sin-ventana', action='store_true')
+    parser.add_argument('--mediciones', type=Path, help='Ruta del resumen final JSON, sin imagenes.')
+    args = parser.parse_args(argv)
+    if args.max_fotogramas < 0 or (args.sin_ventana and args.max_fotogramas == 0):
+        parser.error('--sin-ventana requiere --max-fotogramas positivo.')
     config = cargar_config(args.config)
     imagenes = []
     for ruta in (args.anuncio_a, args.anuncio_b):
@@ -144,26 +152,34 @@ def main():
         imagenes.append(imagen)
     print('Cargando L2CS. Prueba geometrica aproximada, sin validacion de precision.')
     estimador = Estimador()
-    camara = cv2.VideoCapture(config['camara_indice'])
+    camara, emociones = None, None
+    fotogramas = 0
     seguimiento = Seguimiento(banda=config['banda_central_fraccion'])
     calor = False
     inicio_prueba, lecturas, ver_camara = None, [], False
     indice_visible, visible_desde = None, None
     try:
+        if fabrica_emociones is not None:
+            emociones = fabrica_emociones()
+            emociones.abrir()
+        camara = cv2.VideoCapture(config['camara_indice'])
         if not camara.isOpened():
             raise RuntimeError('No se pudo abrir la camara; cierra el otro programa de video.')
         camara.set(cv2.CAP_PROP_FRAME_WIDTH, config['captura_px'][0])
         camara.set(cv2.CAP_PROP_FRAME_HEIGHT, config['captura_px'][1])
         camara.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        cv2.namedWindow(VENTANA, cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty(VENTANA, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        if not args.sin_ventana:
+            cv2.namedWindow(VENTANA, cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty(VENTANA, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         while True:
             correcto, frame = camara.read()
             if not correcto:
                 raise RuntimeError('No se pudo leer la camara.')
             capturado = time.monotonic()
             # Sin espejo: los ejes se corresponden con la camara y la pantalla.
+            emocion = emociones.procesar(frame, capturado*1000) if emociones else None
             resultado = estimador.procesar(frame)
+            fotogramas += 1
             punto, estado = None, 'INDETERMINADA'
             if resultado['estado'] == 'OK':
                 punto = proyectar(resultado['horizontal'], resultado['vertical'], resultado['ojo'],
@@ -196,10 +212,13 @@ def main():
                                          'punto_estimado': list(punto_crudo) if punto_crudo else None})
                     if indice != indice_visible:
                         indice_visible, visible_desde = indice, ahora
-            cv2.imshow(VENTANA, renderizar(config, estado, punto, objetivo, paso, imagenes, seguimiento.resumen(), calor))
-            if ver_camara:
-                cv2.imshow('Camara - sin grabacion', frame)
-            tecla = cv2.waitKey(1) & 0xFF
+            if not args.sin_ventana:
+                cv2.imshow(VENTANA, renderizar(config, estado, punto, objetivo, paso, imagenes,
+                                              seguimiento.resumen(), calor, emocion))
+                if ver_camara:
+                    vista = emociones.vista(frame) if emociones else frame
+                    cv2.imshow('Camara - sin grabacion', vista)
+            tecla = cv2.waitKey(1) & 0xFF if not args.sin_ventana else -1
             if tecla in (27, ord('q'), ord('Q')):
                 break
             if tecla in (ord('h'), ord('H')) and inicio_prueba is None:
@@ -219,15 +238,22 @@ def main():
                 ver_camara = not ver_camara
                 if not ver_camara:
                     cv2.destroyWindow('Camara - sin grabacion')
-            if cv2.getWindowProperty(VENTANA, cv2.WND_PROP_VISIBLE) < 1:
+            if args.max_fotogramas and fotogramas >= args.max_fotogramas:
+                break
+            if not args.sin_ventana and cv2.getWindowProperty(VENTANA, cv2.WND_PROP_VISIBLE) < 1:
                 break
     finally:
         try:
-            if seguimiento.resumen()['total_segundos'] > 0:
-                guardar_sesion(seguimiento, config)
+            if seguimiento.resumen()['total_segundos'] > 0 or args.mediciones:
+                guardar_sesion(seguimiento, config, args.mediciones)
         finally:
-            camara.release()
-            cv2.destroyAllWindows()
+            if camara is not None:
+                camara.release()
+            if emociones is not None:
+                emociones.cerrar()
+            if not args.sin_ventana:
+                cv2.destroyAllWindows()
+    return 0
 
 
 if __name__ == '__main__':

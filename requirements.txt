@@ -1,2 +1,7 @@
+# Python 3.12 x64. OpenCV contrib tambien sirve a RMN y L2CS.
 -r emociones/requirements.txt
 -r mirada/requirements.txt
+mediapipe==0.10.21
+# Evitar que JAX requiera NumPy 2 y rompa MediaPipe 0.10.21.
+jax==0.4.38
+jaxlib==0.4.38

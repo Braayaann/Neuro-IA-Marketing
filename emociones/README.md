@@ -1,60 +1,49 @@
-# RMN original
+# Expresiones faciales
 
-Esta versión usa únicamente el checkpoint `benchmarks/resmasking_net` de
-[Residual Masking Network](https://huggingface.co/phamquiluan/ResidualMaskingNetwork).
-Los pesos están en `emociones/pesos/resmasking_net.pth` y su procedencia y hash
-en `emociones/pesos/procedencia.json`. El código de los autores y su licencia
-se conservan en `emociones/rmn_autores/`.
-
-## Preparación
-
-Desde la raíz del repositorio `Neuro-IA-Marketing`, en PowerShell:
+Desde la raiz del repositorio, con las dependencias de requirements.txt instaladas:
 
 ```powershell
-& "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r emociones\requirements.txt
+.\.venv\Scripts\python.exe main.py --modo emociones
 ```
 
-## Probar
+Este modo usa MediaPipe para localizar rostros y RMN para clasificar sus expresiones.
+M muestra u oculta landmarks, R alterna RMN y Q/Escape cierra la camara.
+Para ejecutar emociones y mirada simultaneamente usa `python main.py`.
 
-```powershell
-.\.venv\Scripts\python.exe emociones\rmn.py foto "C:\ruta\foto.jpg"
-.\.venv\Scripts\python.exe emociones\rmn.py foto "C:\ruta\rostro.png" --recortado
-.\.venv\Scripts\python.exe emociones\rmn.py camara
-```
+## Pesos
 
-Q o Escape cierra la cámara. `--indice 1` selecciona otra cámara.
-No se graba ni se sube video. OpenCV detecta los rostros y RMN clasifica
-sus expresiones. Se conservan las siete categorías originales del modelo.
-Las salidas son expresiones estimadas, no mediciones del estado emocional interno.
+- `emociones/pesos/resmasking_net.pth`: clasificador RMN, aproximadamente 526 MiB.
+- `emociones/pesos/face_landmarker.task`: detector MediaPipe.
+- `config.py` en la raiz: rutas, configuracion y parametros del recorte.
 
-El 74,14 % publicado corresponde al benchmark FER2013; no garantiza esa precisión
-en la cámara del proyecto. Este programa usa una sola pasada, sin TTA.
-
-## Pesos al clonar el repositorio
-
-Para recuperar los pesos automaticamente, desde la raiz del proyecto:
+Recuperacion en un clon nuevo:
 
 ```powershell
 .\.venv\Scripts\python.exe emociones\recuperar_pesos.py
+.\.venv\Scripts\python.exe -m emociones.descargar_detector
 ```
 
-Este comando descarga el checkpoint elegido y comprueba su SHA-256 antes de aceptarlo.
-Si ya existe y es correcto, no vuelve a descargarlo. Para verificarlo sin red, agrega
-`--verificar`. Los pesos no se incluyen en el commit; el script de recuperacion si.
+El recuperador de RMN verifica el SHA-256 antes de aceptar el archivo.
+Agrega `--verificar` para verificar RMN sin red. Los pesos estan excluidos de Git.
 
-El checkpoint de aproximadamente 526 MiB se conserva localmente y está excluido de
-Git. El código, la licencia y la procedencia sí pueden subirse a GitHub. Para obtener
-los pesos en otro computador, ejecuta desde la raíz del repositorio:
+## Comparacion con OpenCV original
+
+`rmn.py` conserva el recorte Haar original como alternativa para comparar con
+el recorte MediaPipe. El modo integrado utiliza `rmn_detector.py`.
 
 ```powershell
-Invoke-WebRequest -Uri "https://huggingface.co/phamquiluan/ResidualMaskingNetwork/resolve/main/benchmarks/resmasking_net?download=true" -OutFile ".\emociones\pesos\resmasking_net.pth"
+.\.venv\Scripts\python.exe emociones\rmn.py camara
+.\.venv\Scripts\python.exe emociones\rmn.py foto "C:\ruta\foto.jpg"
 ```
 
-Al iniciar, `rmn.py` verifica el SHA-256 antes de cargar el archivo.
-El comando de creación del entorno usa el Python disponible en este equipo; en otro
-computador con Python 3.12 instalado puede sustituirse por `python -m venv .venv`.
+## Procedencia
 
+Checkpoint `benchmarks/resmasking_net` de
+[Residual Masking Network](https://huggingface.co/phamquiluan/ResidualMaskingNetwork).
+Su procedencia y hash estan en `pesos/procedencia.json`. Arquitectura y licencia
+MIT de los autores conservadas en `rmn_autores/`.
 
-Desde la raíz también puedes ejecutar `.\.venv\Scripts\python.exe main.py`
-para abrir la cámara. Este acceso utiliza el mismo programa OpenCV + RMN.
+Se mantienen las siete clases originales. El 74.14% publicado corresponde al
+benchmark FER2013 y no es una exactitud medida con esta camara. Las salidas son
+expresiones estimadas, no mediciones del estado emocional interno.
+No se graba ni se sube video por defecto.

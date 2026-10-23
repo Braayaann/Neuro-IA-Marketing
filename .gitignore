@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 .tmp/
 .ipynb_checkpoints/
-emociones/pesos/*.pth
-mirada/pesos/*.pkl*
+.pytest_cache/
+depuracion/
+resultados/
 mirada/resultados/
+*.pth
+*.pt
+*.ckpt
+*.zip
+*.pkl*
+*.task
