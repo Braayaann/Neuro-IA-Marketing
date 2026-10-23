@@ -8,3 +8,4 @@ resultados/
 *.pt
 *.ckpt
 *.zip
+*.pkl
