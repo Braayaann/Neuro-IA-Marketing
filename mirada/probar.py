@@ -11,6 +11,7 @@ import numpy as np
 
 from .estimador import Estimador
 from .geometria import proyectar, region
+from .seguimiento import Seguimiento
 
 BASE = Path(__file__).resolve().parent
 VENTANA = 'Prueba A/B - mirada experimental'
@@ -34,14 +35,14 @@ def texto(canvas, contenido, x, y, escala, color=(245, 245, 245)):
                 escala, color, max(1, int(escala * 2)), cv2.LINE_AA)
 
 
-def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=None):
+def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=None, resumen=None, calor=False):
     ancho, alto = config['pantalla_px']
     escala = ancho / 1600
     canvas = np.full((alto, ancho, 3), (24, 20, 18), np.uint8)
     texto(canvas, 'PROTOTIPO SIN VALIDAR - NO MIDE PREFERENCIA', ancho * .03, alto * .055, .75 * escala)
     etiqueta = 'Prueba en curso: sigue la cruz' if objetivo else f'Estimacion: {estado}'
     texto(canvas, etiqueta, ancho * .03, alto * .115, 1.0 * escala, (80, 225, 240))
-    texto(canvas, 'Geometria aproximada | Una persona a 1 m | Camara arriba al centro',
+    texto(canvas, 'Mirada aproximada por zonas | Una persona a 1 m | Camara arriba al centro',
           ancho * .03, alto * .16, .57 * escala, (170, 170, 170))
     for i, nombre in enumerate(('A', 'B')):
         x1 = int(ancho * (.02 if i == 0 else .52))
@@ -57,6 +58,18 @@ def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=No
             canvas[iy:iy+imagen.shape[0], ix:ix+imagen.shape[1]] = imagen
         else:
             texto(canvas, f'ANUNCIO {nombre}', x1 + (x2-x1)*.20, alto*.53, 1.6*escala)
+        if objetivo is None and calor and resumen:
+            # Color uniforme por anuncio: no simula precision espacial dentro de la zona.
+            porcentaje = resumen['porcentaje_del_tiempo_asignado'][nombre]
+            color_calor = cv2.applyColorMap(np.uint8([[round(porcentaje*2.55)]]), cv2.COLORMAP_JET)[0, 0]
+            capa = np.full_like(canvas[y1:y2, x1:x2], color_calor)
+            cv2.addWeighted(capa, .45, canvas[y1:y2, x1:x2], .55, 0, canvas[y1:y2, x1:x2])
+        if objetivo is None and resumen:
+            segundos = resumen['segundos'][nombre]
+            porcentaje = resumen['porcentaje_del_tiempo_asignado'][nombre]
+            cv2.rectangle(canvas, (x1, y2-int(alto*.07)), (x2, y2), (25, 25, 25), -1)
+            texto(canvas, f'{nombre}: {segundos:.1f} s | {porcentaje:.1f}% del tiempo asignado',
+                  x1+ancho*.01, y2-alto*.025, .55*escala)
         cv2.rectangle(canvas, (x1, y1), (x2, y2), (150, 150, 150), max(1, int(escala)))
     if objetivo is None and punto is not None and all(np.isfinite(punto)) and 0 <= punto[0] <= 1 and 0 <= punto[1] <= 1:
         # Solo muestra un punto estimado, nunca se fuerza uno fuera de pantalla a entrar.
@@ -68,7 +81,10 @@ def renderizar(config, estado, punto=None, objetivo=None, paso=None, imagenes=No
         texto(canvas, f'PRUEBA {paso}/8: mira la cruz del anuncio {objetivo}',
               ancho*.03, alto*.95, .75*escala)
     else:
-        texto(canvas, 'T: prueba guiada (32 s) | V: camara | Q/ESC: salir', ancho*.03, alto*.96, .68*escala)
+        if resumen:
+            texto(canvas, f"Cobertura: {resumen['cobertura']:.0%} | Fuera: {resumen['segundos']['FUERA']:.1f} s | Sin asignar: {resumen['segundos']['INDETERMINADA']:.1f} s",
+                  ancho*.03, alto*.935, .52*escala)
+        texto(canvas, 'H: calor por zonas | R: guardar/reiniciar | T: prueba | V: camara | Q: salir', ancho*.03, alto*.975, .55*escala)
     return canvas
 
 
@@ -100,6 +116,19 @@ def guardar_prueba(lecturas, config):
     return ruta, informe
 
 
+def guardar_sesion(seguimiento, config):
+    carpeta = BASE / 'resultados'
+    carpeta.mkdir(exist_ok=True)
+    ruta = carpeta / datetime.now().strftime('sesion_zonas_%Y%m%d_%H%M%S_%f.json')
+    informe = {'tipo': 'tiempo de mirada estimado por zonas, no preferencia',
+               'configuracion': config, 'resumen': seguimiento.resumen(),
+               'suavizado_segundos': seguimiento.ventana,
+               'permanencia_segundos': seguimiento.permanencia}
+    ruta.write_text(json.dumps(informe, indent=2, allow_nan=False), encoding='utf-8')
+    print('Sesion guardada:', ruta)
+    return ruta
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=BASE/'config.json')
@@ -116,6 +145,8 @@ def main():
     print('Cargando L2CS. Prueba geometrica aproximada, sin validacion de precision.')
     estimador = Estimador()
     camara = cv2.VideoCapture(config['camara_indice'])
+    seguimiento = Seguimiento(banda=config['banda_central_fraccion'])
+    calor = False
     inicio_prueba, lecturas, ver_camara = None, [], False
     indice_visible, visible_desde = None, None
     try:
@@ -143,6 +174,9 @@ def main():
                 if punto is not None and not .02 <= punto[0] <= .98:
                     estado = 'FUERA'
             ahora = time.monotonic()
+            punto_crudo, estado_crudo = punto, estado
+            if inicio_prueba is None:
+                punto, estado = seguimiento.actualizar(ahora, punto, estado)
             objetivo, paso = None, None
             if inicio_prueba is not None:
                 transcurrido = ahora - inicio_prueba
@@ -152,22 +186,30 @@ def main():
                     print(f"Prueba: {informe['pruebas_coincidentes']}/8 coincidencias. Lecturas asignadas: {informe['fraccion_asignada']:.1%}")
                     print('Informe:', ruta)
                     inicio_prueba = None
+                    seguimiento.reiniciar()
                 else:
                     objetivo, paso = SECUENCIA[indice], indice+1
                     if indice == indice_visible and capturado - visible_desde >= 1:
                         lecturas.append({'prueba': indice, 'segundos': round(transcurrido, 3),
-                                         'objetivo': objetivo, 'prediccion': estado,
+                                         'objetivo': objetivo, 'prediccion': estado_crudo,
                                          'estado_detector': resultado['estado'],
-                                         'punto_estimado': list(punto) if punto else None})
+                                         'punto_estimado': list(punto_crudo) if punto_crudo else None})
                     if indice != indice_visible:
                         indice_visible, visible_desde = indice, ahora
-            cv2.imshow(VENTANA, renderizar(config, estado, punto, objetivo, paso, imagenes))
+            cv2.imshow(VENTANA, renderizar(config, estado, punto, objetivo, paso, imagenes, seguimiento.resumen(), calor))
             if ver_camara:
                 cv2.imshow('Camara - sin grabacion', frame)
             tecla = cv2.waitKey(1) & 0xFF
             if tecla in (27, ord('q'), ord('Q')):
                 break
+            if tecla in (ord('h'), ord('H')) and inicio_prueba is None:
+                calor = not calor
+            if tecla in (ord('r'), ord('R')) and inicio_prueba is None:
+                guardar_sesion(seguimiento, config)
+                seguimiento.reiniciar()
             if tecla in (ord('t'), ord('T')) and inicio_prueba is None:
+                guardar_sesion(seguimiento, config)
+                seguimiento.reiniciar()
                 inicio_prueba, lecturas = time.monotonic(), []
                 indice_visible, visible_desde = None, None
                 if ver_camara:
@@ -180,8 +222,12 @@ def main():
             if cv2.getWindowProperty(VENTANA, cv2.WND_PROP_VISIBLE) < 1:
                 break
     finally:
-        camara.release()
-        cv2.destroyAllWindows()
+        try:
+            if seguimiento.resumen()['total_segundos'] > 0:
+                guardar_sesion(seguimiento, config)
+        finally:
+            camara.release()
+            cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':

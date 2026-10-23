@@ -4,9 +4,9 @@ Dos modulos independientes para el prototipo local:
 
 - **emociones/**: deteccion de rostros con OpenCV y clasificacion de expresiones
   mediante RMN preentrenado en PyTorch.
-- **mirada/**: prueba experimental A/B con L2CS-Net para estudiar si distingue dos
-  anuncios. Su geometria y precision requieren validacion antes de producir un mapa
-  de calor o resultados de atencion.
+- **mirada/**: estimacion experimental A/B con L2CS-Net, suavizado temporal,
+  segundos por anuncio y vista de calor por zonas. La geometria es aproximada y
+  las asignaciones deben comprobarse en el montaje.
 
 ## Preparacion
 
@@ -49,7 +49,10 @@ Cierra primero el programa que este usando la camara.
 .\.venv\Scripts\python.exe -m mirada.probar
 ```
 
-T inicia una prueba guiada de 32 segundos; V muestra la camara; Q o Escape sale.
+H alterna el calor por zonas; R guarda y reinicia la sesion; T inicia una prueba
+guiada de 32 segundos; V muestra la camara; Q o Escape guarda el resumen y sale.
+Los porcentajes A/B corresponden al tiempo asignado; la cobertura muestra cuanto
+del tiempo total pudo asignarse. No se considera preferencia.
 Consulta [mirada/README.md](mirada/README.md) para configuracion e interpretacion.
 
 ## Archivos locales y Git

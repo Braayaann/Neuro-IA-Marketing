@@ -18,7 +18,9 @@ imagenes propias sin cambiar el codigo:
 .\.venv\Scripts\python.exe -m mirada.probar --anuncio-a "C:\ruta\A.jpg" --anuncio-b "C:\ruta\B.jpg"
 ```
 
-- Q o Escape: salir y liberar camara.
+- Q o Escape: salir, guardar el resumen de sesion y liberar camara.
+- H: activar/desactivar mapa de calor por zonas (color uniforme por anuncio).
+- R: guardar la sesion actual y reiniciar los contadores.
 - V: ver/ocultar la camara, sin grabar. No esta disponible durante la prueba guiada.
 - T: prueba guiada de 32 segundos; mira la cruz blanca cuando cambie de anuncio.
   Durante esta prueba se ocultan el punto y la prediccion para no guiar las respuestas.
@@ -33,8 +35,20 @@ No se entrena ni se calibra el modelo con los resultados de cada persona.
 ## Interpretar la prueba
 
 La etiqueta es una estimacion A, B, FUERA o INDETERMINADA. No es preferencia, agrado
-ni una medicion validada de atencion. Aun no se generan porcentajes de audiencia
-ni mapas de calor: primero hay que comprobar que las asignaciones sean fiables.
+ni una medicion validada de atencion. Se muestran segundos por anuncio y porcentajes sobre el tiempo asignado a A/B.
+La cobertura indica cuanto del tiempo total pudo asignarse; FUERA e INDETERMINADA
+se conservan por separado. No son porcentajes de audiencia ni preferencia.
+H muestra un mapa agregado por zonas; no localiza puntos precisos dentro del anuncio.
+
+Las posiciones se suavizan con una mediana temporal de 0.35 s y una permanencia
+minima de 0.20 s antes de aceptar una zona. La perdida de rostro corta la asignacion;
+los saltos de mas de 0.5 s cuentan como indeterminados. Los tiempos usan reloj real,
+no numero de fotogramas. R guarda y reinicia. T guarda la sesion, ejecuta la prueba
+con lecturas crudas y comienza una nueva sesion al terminar: no mezcla los objetivos
+guiados con los tiempos de observacion libre. Solo se guarda el resumen JSON, sin
+fotos ni video, en mirada/resultados/ (excluido de Git).
+La vista de calor y los contadores pueden atraer la mirada: para medir deja H y V
+apagados. Los resultados siguen siendo estimaciones por comprobar en el montaje.
 
 L2CS devuelve direccion de mirada. La conversion a pantalla utiliza la posicion
 aproximada de los ojos, un modelo de camara y una distancia fija. `config.json` usa:
