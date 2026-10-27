@@ -1,0 +1,42 @@
+<nav id="controles" aria-label="Controles del seguimiento">
+  <div class="fila">
+    <label>Modo <select id="modo"><option value="ocular">Seguimiento ocular</option><option value="mouse">Demostración con mouse</option></select></label>
+    <label>Cámara <input id="camara" type="number" min="0" max="9" value="0"></label>
+    <button data-action="camara_iniciar">Iniciar cámara</button><button data-action="camara_detener">Detener cámara</button>
+    <button data-action="calibrar" id="calibrar">Iniciar calibración</button>
+    <button data-action="calibrar" id="recalibrar">Repetir calibración</button>
+    <button data-action="validar">Validar calibración</button>
+  </div>
+  <div class="fila">
+    <button data-action="seguir">Iniciar seguimiento ocular</button><button data-action="pausar">Pausar seguimiento</button>
+    <button data-action="demo">Reanudar demo mouse</button>
+    <button id="guardar">Guardar mapa de calor</button>
+    <label><input id="punto-visible" type="checkbox"> Mostrar punto</label>
+    <label><input id="calor-visible" type="checkbox" checked> Mostrar calor</label>
+    <button id="ver-diagnostico">Estado y validación</button>
+    <button data-action="comprobar_dibujo">Comprobar dibujo</button>
+    <label>Estimador <select id="modelo-elegido" disabled><option value="R">Referencia anterior</option><option value="A">A: ojos</option><option value="B">B: ojos + cabeza</option></select></label>
+    <button id="usar-modelo" disabled>Usar modelo</button>
+    <span id="estado-corto">Conectando con Python…</span>
+  </div>
+</nav>
+<p id="mensaje" role="status"></p>
+<aside id="diagnostico" hidden>
+  <div class="fila"><strong>Diagnóstico de la sesión</strong><button id="cerrar-diagnostico">Cerrar panel</button></div>
+  <img id="preview" alt="Vista de cámara local" hidden>
+  <pre id="estado-detalle"></pre>
+  <div id="dibujo-informe">Dibujo: pendiente de comprobación.</div>
+  <div id="comparacion-ab">Comparación A/B pendiente.</div>
+  <div id="resumen-validacion">Aún no hay una validación medida.</div>
+  <canvas id="validacion-grafico" width="440" height="240" aria-label="Objetivos reales y estimaciones"></canvas>
+  <div id="tabla-validacion"></div>
+  <p>Blanco: objetivo. Cian: estimación media. Segmento: error. No son fijaciones certificadas.</p>
+</aside>
+<div id="fase" hidden>
+  <div id="fase-info"><strong id="fase-titulo"></strong><p id="fase-progreso"></p>
+    <button id="repetir-punto" data-action="repetir_punto" hidden>Repetir punto</button>
+    <button data-action="pausar">Cancelar fase</button>
+  </div>
+  <div id="objetivo" hidden><i></i></div>
+</div>
+<div id="mirada" hidden></div>
