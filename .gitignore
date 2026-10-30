@@ -10,3 +10,5 @@ modelos/*.task
 *.pt
 *.ckpt
 *.zip
+*.pkl
+emociones/pesos/face_landmarker.task
