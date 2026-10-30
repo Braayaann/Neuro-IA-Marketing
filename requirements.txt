@@ -1,9 +1,8 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.1+cpu
 torchvision==0.29.1+cpu
-numpy==1.26.4
-opencv-contrib-python==4.11.0.86
-Pillow>=10,<14
 mediapipe==0.10.21
-jax==0.4.38
-jaxlib==0.4.38
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
+pyautogui==0.9.54
+keyboard==0.13.5

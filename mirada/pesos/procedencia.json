@@ -1,9 +1,0 @@
-{
-  "arquitectura": "https://github.com/Ahmednull/L2CS-Net",
-  "commit_codigo": "a4d8f7fa5436a2b2b9f088471623b552a85811bd",
-  "pesos_url": "https://huggingface.co/tianfxc/l2cs/resolve/424a499580d1217b57f8f1f3c2a5582c30cd6610/L2CSNet_gaze360.pkl?download=true",
-  "sha256": "8a7f3480d868dd48261e1d59f915b0ef0bb33ea12ea00938fb2168f212080665",
-  "fuente": "Copia de terceros tianfxc/l2cs; enlace Drive del README oficial devolvio 404.",
-  "verificacion": "Mismo SHA publicado tambien en dorni/SpeakerVid-5M-data-curation-models. No es autenticacion del autor.",
-  "sha256_codigo": "2fcf682d880bc22a4686b22ff89d48d0a46429ce47e6025a3aeaf1e6fb6fc2c0"
-}

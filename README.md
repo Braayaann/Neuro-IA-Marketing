@@ -1,45 +1,56 @@
 # Neuro IA Marketing
 
-Ejecuta desde esta carpeta, usando Python 3.12 y el entorno .venv:
+Prototipo local para Windows: iris con MediaPipe FaceMesh y expresiones faciales con RMN. Una sola captura de cámara para ambos. No usa L2CS ni estima la mirada mediante ángulos de la cabeza.
+
+## Ejecutar
+
+Desde la raíz del repositorio, en PowerShell:
 
 ```powershell
 .\.venv\Scripts\python.exe main.py
 ```
 
-- Ambos modelos: main.py
-- Solo expresiones MediaPipe + RMN: main.py --modo emociones
-- Solo mirada L2CS: main.py --modo mirada
+También puedes abrir `ejecutar.bat`. Se abre el HTML del cliente y una vista de cámara.
 
-El modo conjunto comparte una camara y esta preparado para una persona.
-H muestra calor por anuncio, V muestra la camara, R guarda/reinicia tiempos,
-T inicia la prueba guiada y Q/Escape guarda el resumen y cierra.
-En modo emociones, M alterna los puntos faciales y R alterna RMN.
+- `C`: calibrar mirando nueve puntos. Después vuelve a la página del navegador.
+- `P`: pausar o reanudar el movimiento del cursor.
+- `Q`: salir, incluso cuando el navegador tiene el foco.
+- Cierra otras aplicaciones que usen la cámara.
 
-## Instalar en otro equipo
+Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada persona debe recalibrar. El ajuste se conserva solo durante la ejecución. La calibración ajusta la conversión de coordenadas; no demuestra precisión. El mapa se borra al recargar la página.
+
+```powershell
+# Solo el seguimiento por iris
+.\.venv\Scripts\python.exe main.py --modo mirada
+# Solo expresiones
+.\.venv\Scripts\python.exe main.py --modo emociones
+# Conversión directa del ejemplo del cliente, sin ajustar los nueve puntos
+.\.venv\Scripts\python.exe main.py --modo mirada --sin-calibracion
+# Clic al cerrar el ojo, como en el original (opcional)
+.\.venv\Scripts\python.exe main.py --modo mirada --sin-calibracion --clic-parpadeo
+# Verificar ambos modelos sin cámara
+.\.venv\Scripts\python.exe main.py --diagnostico
+```
+
+Para detener el control del cursor también puedes mover el mouse a una esquina (protección de PyAutoGUI). No se guardan fotos ni videos.
+
+## Instalación
+
+Python 3.12 de 64 bits en Windows:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe emociones\recuperar_pesos.py
-.\.venv\Scripts\python.exe -m emociones.descargar_detector
-.\.venv\Scripts\python.exe -m mirada.descargar
+.\.venv\Scripts\python.exe -m emociones.recuperar_pesos
 ```
 
-## Archivos necesarios
+MediaPipe FaceMesh trae su detector; no necesita el archivo `face_landmarker.task`. Los pesos RMN se guardan en `emociones/pesos/resmasking_net.pth` y quedan fuera de Git, igual que `.venv` y las cachés. La arquitectura en `emociones/rmn_autores` sí es necesaria para cargarlos y conserva la licencia de sus autores.
 
-- main.py: entrada comun.
-- config.py: parametros y pesos de expresiones.
-- emociones/: MediaPipe, RMN, pesos y descargadores.
-- mirada/: L2CS, configuracion de pantalla, suavizado e interfaz.
-- utilidades/: recortes y mediciones que utiliza la aplicacion.
-- requirements.txt: todas las dependencias.
-- .gitignore: excluye entorno, pesos, caches y resultados.
+## Procedencia y límites
 
-Los directorios rmn_autores y l2cs_autores contienen las arquitecturas que
-necesitan los pesos para ejecutarse. Se conservan sus licencias y procedencia.
-El modo conjunto usa la camara indicada en mirada/config.json; el modo
-emociones usa config.py. Los pesos de este equipo permanecen en sus carpetas.
+`mirada/heatmap.html` deriva del HTML del cliente. `main.py` utiliza su punto de iris 475 y el fotograma reflejado; agrega liberación de cámara, calibración y el clasificador RMN. Los clics se habilitan explícitamente. El HTML limita la acumulación cuando deja de recibir movimientos recientes; el mouse físico también dibuja en el mapa. Es una demostración del cursor, no una medición validada del tiempo de atención. Su diseño e imágenes externas requieren conexión a Internet.
 
-Los porcentajes A/B describen tiempo de mirada estimado, no preferencia.
-La expresion clasificada no demuestra el estado emocional interno.
-No se graba video por defecto. Los resumenes quedan en mirada/resultados/.
+El ajuste usa coordenadas del iris dentro de la cámara, no orientación de cabeza ni un modelo de mirada preentrenado. Mover la cabeza puede alterar la estimación. RMN clasifica expresiones faciales y no demuestra la emoción interna de una persona.
+
+RMN: https://github.com/phamquiluan/ResidualMaskingNetwork
+Pesos: https://huggingface.co/phamquiluan/ResidualMaskingNetwork

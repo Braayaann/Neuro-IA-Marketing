@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Calor - Rastreo Ocular</title>
+    <!-- Tailwind CSS para el diseño rápido y moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc;
+        }
+        /* El canvas debe cubrir toda la pantalla, estar fijo y no interferir con los clics */
+        #heatmap-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none; /* Permite hacer clic a través del canvas */
+            z-index: 50;
+        }
+        /* Efecto sutil al pasar por las imágenes */
+        .img-container img {
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+        }
+        .img-container:hover img {
+            transform: scale(1.03);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+
+    <div class="max-w-5xl w-full space-y-8 text-center z-10 relative mb-12">
+        <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            Simulador de Seguimiento Ocular
+        </h1>
+        <p class="mt-4 text-lg text-slate-300 max-w-2xl mx-auto">
+            Usa tu script de Python para mover el cursor con tus ojos. Observa las imágenes a continuación. El mapa visualiza el cursor estimado. Es una demostración; no valida atención ni precisión de mirada.
+        </p>
+    </div>
+
+    <div class="max-w-6xl w-full grid grid-cols-1 md:grid-cols-3 gap-8 z-10 relative mb-24">
+
+        <!-- Imagen 1: Moda -->
+        <div class="img-container relative rounded-2xl overflow-hidden bg-slate-800 ring-1 ring-white/10 shadow-xl cursor-crosshair">
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent z-10 pointer-events-none"></div>
+            <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80" alt="Moda" class="w-full h-80 object-cover">
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white z-20 pointer-events-none">Moda</h3>
+        </div>
+
+        <!-- Imagen 2: Tecnología -->
+        <div class="img-container relative rounded-2xl overflow-hidden bg-slate-800 ring-1 ring-white/10 shadow-xl cursor-crosshair">
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent z-10 pointer-events-none"></div>
+            <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80" alt="Tecnología" class="w-full h-80 object-cover">
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white z-20 pointer-events-none">Tecnología</h3>
+        </div>
+
+        <!-- Imagen 3: Naturaleza -->
+        <div class="img-container relative rounded-2xl overflow-hidden bg-slate-800 ring-1 ring-white/10 shadow-xl cursor-crosshair">
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent z-10 pointer-events-none"></div>
+            <img src="https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=800&q=80" alt="Naturaleza" class="w-full h-80 object-cover">
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white z-20 pointer-events-none">Naturaleza</h3>
+        </div>
+    </div>
+
+    <!-- Botón flotante para limpiar el canvas -->
+    <button id="clear-btn" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[60] bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-8 rounded-full shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        Limpiar Mapa de Calor
+    </button>
+
+    <!-- Capa del Canvas para el Heatmap -->
+    <canvas id="heatmap-canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('heatmap-canvas');
+        const ctx = canvas.getContext('2d');
+        const clearBtn = document.getElementById('clear-btn');
+
+        // Ajustar el tamaño del canvas al tamaño exacto de la ventana
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Variables de estado del mouse/mirada
+        let mouseX = -1000;
+        let mouseY = -1000;
+        let isCursorActive = false;
+
+        // Configuración de la "brocha" del mapa de calor
+        let ultimaMuestra = 0;
+        const radius = 60; // Tamaño del punto de calor
+
+        // Función principal que dibuja el calor
+        function drawHeatPoint(x, y) {
+            // Creamos un gradiente radial (intenso en el centro, transparente en los bordes)
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+
+            // Colores tipo Heatmap (baja opacidad para permitir acumulación)
+            // Centro rojo intenso, luego naranja, luego amarillo, y finalmente transparente
+            gradient.addColorStop(0, "rgba(255, 0, 0, 0.05)");   // Centro (Caliente)
+            gradient.addColorStop(0.4, "rgba(255, 120, 0, 0.03)"); // Medio (Cálido)
+            gradient.addColorStop(0.8, "rgba(255, 255, 0, 0.01)"); // Borde (Tibio)
+            gradient.addColorStop(1, "rgba(0, 0, 0, 0)");        // Fuera (Frío)
+
+            // Modo de composición para que los colores se sumen y brillen al superponerse
+            ctx.globalCompositeOperation = 'lighter';
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Escuchar el movimiento del cursor
+        document.addEventListener('mousemove', (e) => {
+            ultimaMuestra = performance.now();
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            isCursorActive = true;
+            drawHeatPoint(mouseX, mouseY);
+        });
+
+        // Pausar si el mouse sale de la ventana
+        document.addEventListener('mouseleave', () => isCursorActive = false);
+        document.addEventListener('mouseenter', () => isCursorActive = true);
+
+        // Bucle que simula la "acumulación de calor" si te quedas mirando fijo
+        // Ejecuta la función de dibujo cada 30 milisegundos en la posición actual
+        setInterval(() => {
+            if (isCursorActive && !document.hidden && performance.now() - ultimaMuestra < 500) {
+                drawHeatPoint(mouseX, mouseY);
+            }
+        }, 30);
+
+        // Funcionalidad para limpiar la pantalla
+        clearBtn.addEventListener('click', () => {
+            // Limpiamos el canvas completo
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+    </script>
+</body>
+</html>
