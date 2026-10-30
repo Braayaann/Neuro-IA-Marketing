@@ -4,11 +4,11 @@ __pycache__/
 .pytest_cache/
 .env
 .env.*
+.tmp/
 resultados/
-modelos/*.task
 *.pth
 *.pt
 *.ckpt
-*.zip
 *.pkl
-emociones/pesos/face_landmarker.task
+*.task
+*.zip

@@ -1,6 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
 mediapipe==0.10.21
 opencv-contrib-python==4.11.0.86
 numpy==1.26.4
-scikit-learn==1.6.1
-Pillow>=10,<14
-Flask==3.1.2
+pyautogui==0.9.54
+keyboard==0.13.5
