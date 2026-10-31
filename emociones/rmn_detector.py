@@ -16,9 +16,8 @@ def verificar_checkpoint(ruta):
     if not ruta.is_file():
         raise FileNotFoundError(
             f'Falta el checkpoint original RMN: {ruta}\n'
-            'Configura RUTA_RMN o copia allí resmasking_net.pth. '
-            'No se descargan pesos automáticamente. Para probar la cámara: '
-            'python main.py --solo-mediapipe'
+            'Para recuperar los pesos ejecuta: python -m emociones.recuperar_pesos. '
+            'Para probar solo la mirada: python main.py --modo mirada'
         )
     with ruta.open('rb') as archivo:
         digest = hashlib.file_digest(archivo, 'sha256').hexdigest()
