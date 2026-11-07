@@ -9,19 +9,9 @@ import mediapipe as mp
 import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS
+from mirada.iris import CENTROS_IRIS, obtener_iris
 
 BASE = Path(__file__).resolve().parent
-
-
-def obtener_iris(rostros):
-    if len(rostros) != 1:
-        return None
-    p = rostros[0].landmark
-    # Mismo punto utilizado por mouse_ocular.py del cliente.
-    if p[145].y-p[159].y < .004:
-        return None
-    xy = np.array([p[475].x, p[475].y])
-    return xy if np.isfinite(xy).all() and ((xy >= 0) & (xy <= 1)).all() else None
 
 
 def clasificar(frame, rostros, modelo):
@@ -89,7 +79,7 @@ def ejecutar(args):
                     raise RuntimeError('La cámara dejó de entregar imágenes.')
                 frame = cv2.flip(frame, 1)
                 rostros = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).multi_face_landmarks or []
-                iris = obtener_iris(rostros)
+                iris = obtener_iris(rostros, (frame.shape[1], frame.shape[0]))
                 ahora = time.perf_counter()
                 if calibrando:
                     transcurrido = ahora-inicio
@@ -134,7 +124,10 @@ def ejecutar(args):
                         cv2.rectangle(vista, (x1, y1), (x2, y2), (0, 220, 0), 1)
                         cv2.putText(vista, texto, (x1, max(20, y1-8)), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 220, 0), 2)
                 if iris is not None:
-                    cv2.circle(vista, tuple((iris*[frame.shape[1], frame.shape[0]]).astype(int)), 3, (0, 255, 255), -1)
+                    for indice in CENTROS_IRIS:
+                        centro = rostros[0].landmark[indice]
+                        cv2.circle(vista, (round(centro.x*frame.shape[1]), round(centro.y*frame.shape[0])),
+                                   3, (0, 255, 255), -1)
                 estado = 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
                 cv2.putText(vista, f'{estado} | Q: salir', (10, vista.shape[0]-15), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                 cv2.imshow(ventana, vista)
@@ -162,7 +155,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--modo', choices=('mirada', 'emociones', 'ambos'), default='ambos')
     parser.add_argument('--camara', type=int, default=0)
-    parser.add_argument('--sin-calibracion', action='store_true', help='Conversión directa del cliente; solo para comparar.')
+    parser.add_argument('--sin-calibracion', action='store_true', help='Conversión directa de la señal relativa binocular; sin precisión de pantalla.')
     parser.add_argument('--clic-parpadeo', action='store_true', help='Habilita los clics del ejemplo original.')
     parser.add_argument('--diagnostico', action='store_true', help='Prueba modelos sin cámara ni movimiento del cursor.')
     try:

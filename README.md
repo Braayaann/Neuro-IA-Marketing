@@ -2,6 +2,8 @@
 
 Prototipo local para Windows: iris con MediaPipe FaceMesh y expresiones faciales con RMN. Una sola captura de cámara para ambos. No usa L2CS ni estima la mirada mediante ángulos de la cabeza.
 
+El seguimiento usa los centros de ambos iris (468 y 473) respecto a las comisuras y los párpados de cada ojo. Promedia sus coordenadas relativas y utiliza esa señal en la calibración de nueve puntos. La cámara muestra un punto amarillo en cada iris cuando ambos ojos son utilizables. Solo se admite una persona para el seguimiento.
+
 ## Ejecutar
 
 Desde la raíz del repositorio, en PowerShell:
@@ -24,7 +26,7 @@ Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada
 .\.venv\Scripts\python.exe main.py --modo mirada
 # Solo expresiones
 .\.venv\Scripts\python.exe main.py --modo emociones
-# Conversión directa del ejemplo del cliente, sin ajustar los nueve puntos
+# Conversión directa de la señal relativa de ambos ojos, sin ajustar los nueve puntos
 .\.venv\Scripts\python.exe main.py --modo mirada --sin-calibracion
 # Clic al cerrar el ojo, como en el original (opcional)
 .\.venv\Scripts\python.exe main.py --modo mirada --sin-calibracion --clic-parpadeo
@@ -48,9 +50,9 @@ MediaPipe FaceMesh trae su detector; no necesita el archivo `face_landmarker.tas
 
 ## Procedencia y límites
 
-`mirada/heatmap.html` deriva del HTML del cliente. `main.py` utiliza su punto de iris 475 y el fotograma reflejado; agrega liberación de cámara, calibración y el clasificador RMN. Los clics se habilitan explícitamente. El HTML limita la acumulación cuando deja de recibir movimientos recientes; el mouse físico también dibuja en el mapa. Es una demostración del cursor, no una medición validada del tiempo de atención. Su diseño e imágenes externas requieren conexión a Internet.
+`mirada/heatmap.html` deriva del HTML del cliente. `main.py` conserva el fotograma reflejado e incorpora seguimiento binocular relativo, liberación de cámara, calibración y el clasificador RMN. Los clics se habilitan explícitamente. El HTML limita la acumulación cuando deja de recibir movimientos recientes; el mouse físico también dibuja en el mapa. Es una demostración del cursor, no una medición validada del tiempo de atención. Su diseño e imágenes externas requieren conexión a Internet.
 
-El ajuste usa coordenadas del iris dentro de la cámara, no orientación de cabeza ni un modelo de mirada preentrenado. Mover la cabeza puede alterar la estimación. RMN clasifica expresiones faciales y no demuestra la emoción interna de una persona.
+El ajuste usa el promedio de las posiciones de ambos iris relativas a sus ojos, no orientación de cabeza ni un modelo de mirada preentrenado. Debes volver a calibrar al iniciar: la nueva señal sustituye a las coordenadas absolutas del iris. Este cambio reduce la dependencia directa del desplazamiento del rostro en la imagen, pero mover o girar la cabeza todavía puede alterar la estimación. `--sin-calibracion` utiliza directamente la señal relativa, no reproduce la conversión original del cliente ni garantiza cubrir la pantalla. RMN clasifica expresiones faciales y no demuestra la emoción interna de una persona.
 
 RMN: https://github.com/phamquiluan/ResidualMaskingNetwork
 Pesos: https://huggingface.co/phamquiluan/ResidualMaskingNetwork
