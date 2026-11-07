@@ -2,6 +2,7 @@
 import argparse
 from pathlib import Path
 import time
+import unicodedata
 import webbrowser
 
 import cv2
@@ -9,6 +10,7 @@ import mediapipe as mp
 import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS
+from mirada.captura import CapturaPunto
 from mirada.iris import CENTROS_IRIS, obtener_iris
 from mirada.suavizado import SuavizadoMirada
 
@@ -64,8 +66,10 @@ def ejecutar(args):
         raise RuntimeError('No se pudo abrir la cámara. Revisa permisos y otras aplicaciones.')
     ajuste = None
     calibrando = False
-    puntos, muestras = [], []
-    inicio = 0.
+    puntos = []
+    captura = None
+    intento = 1
+    aviso = ''
     ultimo_click = 0.
     ventana = 'Neuro IA - Camara'
     objetivo_ventana = 'Calibracion - mira el punto'
@@ -87,15 +91,16 @@ def ejecutar(args):
                 if iris is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
-                    transcurrido = ahora-inicio
-                    if .8 <= transcurrido <= 2.8 and iris is not None:
-                        muestras.append(iris)
-                    if transcurrido > 2.8:
-                        if len(muestras) >= 10:
-                            puntos.append(np.median(muestras, axis=0))
+                    resultado = captura.actualizar(iris, ahora)
+                    if resultado is not None:
+                        if resultado.posicion is not None:
+                            puntos.append(resultado.posicion)
+                            intento = 1
+                            aviso = ''
                         else:
-                            print('Pocas muestras válidas. Se repite el punto.')
-                        muestras = []
+                            intento += 1
+                            aviso = resultado.motivo
+                            print(f'Punto {len(puntos)+1}: {aviso} Se repite.')
                         if len(puntos) == 9:
                             try:
                                 ajuste = Calibracion().ajustar(puntos)
@@ -106,13 +111,22 @@ def ejecutar(args):
                             calibrando = False
                             cv2.destroyWindow(objetivo_ventana)
                         else:
-                            inicio = ahora
+                            captura = CapturaPunto(ahora)
                     if calibrando:
                         pantalla = np.zeros((alto, ancho, 3), np.uint8)
                         x, y = OBJETIVOS[len(puntos)]
-                        cv2.circle(pantalla, (round(x*(ancho-1)), round(y*(alto-1))), 16, (0, 230, 255), -1)
-                        cv2.putText(pantalla, f'Mira el punto {len(puntos)+1}/9 - Q cancela', (30, 40),
-                                    cv2.FONT_HERSHEY_SIMPLEX, .8, (255, 255, 255), 2)
+                        fase, restante = captura.estado(ahora)
+                        color = (0, 230, 255) if fase == 'PREPARATE' else (0, 220, 0)
+                        cv2.circle(pantalla, (round(x*(ancho-1)), round(y*(alto-1))), 16, color, -1)
+                        mensajes = [(30, f'Punto {len(puntos)+1}/9 | Intento {intento} | Mira el punto sin mover la cabeza | Q: salir'),
+                                    (alto-35, f'{fase}: {restante:.1f}s | Muestras validas: {len(captura.muestras)}')]
+                        if aviso:
+                            mensajes.append((alto-10, 'Se repite: ' + aviso))
+                        # Hershey no dibuja tildes; el motivo completo también va a consola.
+                        for altura_texto, texto in mensajes:
+                            texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode()
+                            cv2.putText(pantalla, texto, (20, altura_texto),
+                                        cv2.FONT_HERSHEY_SIMPLEX, min(.55, ancho/1800), (255, 255, 255), 1)
                         cv2.imshow(objetivo_ventana, pantalla)
                 elif mirada and not pausa and iris is not None and (ajuste or args.sin_calibracion):
                     senal = filtro.actualizar(iris, ahora) if suavizado else iris
@@ -149,11 +163,12 @@ def ejecutar(args):
                 s = mirada and (tecla == ord('s') or keyboard.is_pressed('s'))
                 if c and not anterior_c:
                     filtro.reiniciar()
-                    ajuste, puntos, muestras = None, [], []
+                    ajuste, puntos = None, []
+                    intento, aviso = 1, ''
                     calibrando = True
                     cv2.namedWindow(objetivo_ventana, cv2.WINDOW_NORMAL)
                     cv2.setWindowProperty(objetivo_ventana, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                    inicio = time.perf_counter()
+                    captura = CapturaPunto(time.perf_counter())
                 if p and not anterior_p and not calibrando:
                     pausa = not pausa
                     filtro.reiniciar()
