@@ -16,6 +16,7 @@ También puedes abrir `ejecutar.bat`. Se abre el HTML del cliente y una vista de
 
 - `C`: calibrar mirando nueve puntos. Después vuelve a la página del navegador.
 - `P`: pausar o reanudar el movimiento del cursor.
+- `S`: activar o desactivar el suavizado durante la misma sesión, incluso desde el navegador. La cámara muestra su estado.
 - `Q`: salir, incluso cuando el navegador tiene el foco.
 - Cierra otras aplicaciones que usen la cámara.
 
@@ -24,6 +25,8 @@ Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada
 ```powershell
 # Solo el seguimiento por iris
 .\.venv\Scripts\python.exe main.py --modo mirada
+# Comparar comenzando sin suavizado (también puedes pulsar S)
+.\.venv\Scripts\python.exe main.py --modo mirada --sin-suavizado
 # Solo expresiones
 .\.venv\Scripts\python.exe main.py --modo emociones
 # Conversión directa de la señal relativa de ambos ojos, sin ajustar los nueve puntos
@@ -35,6 +38,10 @@ Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada
 ```
 
 Para detener el control del cursor también puedes mover el mouse a una esquina (protección de PyAutoGUI). No se guardan fotos ni videos.
+
+El suavizado adaptativo One Euro está activado por defecto y se aplica al promedio binocular antes de convertirlo a pantalla. La calibración sigue capturando muestras sin filtrar. El filtro se reinicia al perder una muestra válida, pausar, recalibrar, alternarlo o recibir muestras separadas por más de 0,5 segundos. Los puntos amarillos de la cámara muestran las detecciones originales, sin suavizar.
+
+Su configuración inicial es corte mínimo de 1 Hz, beta de 10 y corte de velocidad de 1 Hz, con tiempos reales entre muestras. Son valores de partida que requieren prueba con cámara. El filtro introduce retraso, no garantiza inmovilidad, no rechaza saltos aislados ni corrige desvíos de calibración. Referencia del algoritmo: [One Euro, Casiez et al.](https://gery.casiez.net/1euro/).
 
 ## Instalación
 

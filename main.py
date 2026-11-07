@@ -10,6 +10,7 @@ import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS
 from mirada.iris import CENTROS_IRIS, obtener_iris
+from mirada.suavizado import SuavizadoMirada
 
 BASE = Path(__file__).resolve().parent
 
@@ -68,9 +69,11 @@ def ejecutar(args):
     ultimo_click = 0.
     ventana = 'Neuro IA - Camara'
     objetivo_ventana = 'Calibracion - mira el punto'
-    print('Q: salir | C: calibrar | P: pausar/reanudar cursor. Mantén la posición tras calibrar.')
+    print('Q: salir | C: calibrar | P: pausar/reanudar | S: suavizado ON/OFF. Mantén la posición tras calibrar.')
     pausa = False
-    anterior_c = anterior_p = False
+    suavizado = not args.sin_suavizado
+    filtro = SuavizadoMirada()
+    anterior_c = anterior_p = anterior_s = False
     try:
         with mp.solutions.face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=2) as detector:
             while True:
@@ -81,6 +84,8 @@ def ejecutar(args):
                 rostros = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).multi_face_landmarks or []
                 iris = obtener_iris(rostros, (frame.shape[1], frame.shape[0]))
                 ahora = time.perf_counter()
+                if iris is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
+                    filtro.reiniciar()
                 if calibrando:
                     transcurrido = ahora-inicio
                     if .8 <= transcurrido <= 2.8 and iris is not None:
@@ -110,7 +115,8 @@ def ejecutar(args):
                                     cv2.FONT_HERSHEY_SIMPLEX, .8, (255, 255, 255), 2)
                         cv2.imshow(objetivo_ventana, pantalla)
                 elif mirada and not pausa and iris is not None and (ajuste or args.sin_calibracion):
-                    xy = ajuste.predecir(iris) if ajuste else iris
+                    senal = filtro.actualizar(iris, ahora) if suavizado else iris
+                    xy = ajuste.predecir(senal) if ajuste else senal
                     if np.isfinite(xy).all() and ((xy >= 0) & (xy <= 1)).all():
                         pyautogui.moveTo(round(xy[0]*(ancho-1)), round(xy[1]*(alto-1)))
                 if mirada and args.clic_parpadeo and not pausa and not calibrando and len(rostros) == 1:
@@ -129,6 +135,9 @@ def ejecutar(args):
                         cv2.circle(vista, (round(centro.x*frame.shape[1]), round(centro.y*frame.shape[0])),
                                    3, (0, 255, 255), -1)
                 estado = 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
+                if mirada:
+                    texto_filtro = 'CALIBRACION SIN FILTRO' if calibrando else f'S: suavizado {"ON" if suavizado else "OFF"}'
+                    cv2.putText(vista, texto_filtro, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                 cv2.putText(vista, f'{estado} | Q: salir', (10, vista.shape[0]-15), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                 cv2.imshow(ventana, vista)
                 tecla = cv2.waitKey(1) & 0xff
@@ -137,7 +146,9 @@ def ejecutar(args):
                     break
                 c = mirada and (tecla == ord('c') or keyboard.is_pressed('c'))
                 p = mirada and (tecla == ord('p') or keyboard.is_pressed('p'))
+                s = mirada and (tecla == ord('s') or keyboard.is_pressed('s'))
                 if c and not anterior_c:
+                    filtro.reiniciar()
                     ajuste, puntos, muestras = None, [], []
                     calibrando = True
                     cv2.namedWindow(objetivo_ventana, cv2.WINDOW_NORMAL)
@@ -145,7 +156,12 @@ def ejecutar(args):
                     inicio = time.perf_counter()
                 if p and not anterior_p and not calibrando:
                     pausa = not pausa
-                anterior_c, anterior_p = c, p
+                    filtro.reiniciar()
+                if s and not anterior_s:
+                    suavizado = not suavizado
+                    filtro.reiniciar()
+                    print(f'Suavizado: {"ON" if suavizado else "OFF"}. La calibración siempre usa muestras sin filtrar.')
+                anterior_c, anterior_p, anterior_s = c, p, s
     finally:
         camara.release()
         cv2.destroyAllWindows()
@@ -157,6 +173,7 @@ def main():
     parser.add_argument('--camara', type=int, default=0)
     parser.add_argument('--sin-calibracion', action='store_true', help='Conversión directa de la señal relativa binocular; sin precisión de pantalla.')
     parser.add_argument('--clic-parpadeo', action='store_true', help='Habilita los clics del ejemplo original.')
+    parser.add_argument('--sin-suavizado', action='store_true', help='Inicia sin filtro temporal; S permite alternarlo durante la sesión.')
     parser.add_argument('--diagnostico', action='store_true', help='Prueba modelos sin cámara ni movimiento del cursor.')
     try:
         ejecutar(parser.parse_args())
