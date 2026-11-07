@@ -11,7 +11,9 @@ import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS
 from mirada.captura import CapturaPunto
-from mirada.iris import CENTROS_IRIS, obtener_iris
+from mirada.iris import CENTROS_IRIS, obtener_iris_por_ojo
+from mirada.postura import obtener_postura, comparar_postura
+from mirada.diagnostico import ResumenTerminal, emitir
 from mirada.suavizado import SuavizadoMirada
 
 BASE = Path(__file__).resolve().parent
@@ -78,6 +80,14 @@ def ejecutar(args):
     suavizado = not args.sin_suavizado
     filtro = SuavizadoMirada()
     anterior_c = anterior_p = anterior_s = False
+    referencia_postura = None
+    posturas_punto, posturas_aceptadas = [], []
+    inicio_sesion = time.perf_counter()
+    resumen = ResumenTerminal(inicio_sesion)
+    emitir('inicio', version=1, modo=args.modo, camara=args.camara,
+           pantalla=[ancho, alto] if mirada else None, mediapipe=mp.__version__, opencv=cv2.__version__,
+           suavizado=suavizado, filtro={'corte_minimo': filtro.corte_minimo, 'beta': filtro.beta},
+           umbrales_postura={'grados': 8, 'desplazamiento_anchos_cara': .15, 'cambio_ancho': .15})
     try:
         with mp.solutions.face_mesh.FaceMesh(refine_landmarks=True, max_num_faces=2) as detector:
             while True:
@@ -86,15 +96,29 @@ def ejecutar(args):
                     raise RuntimeError('La cámara dejó de entregar imágenes.')
                 frame = cv2.flip(frame, 1)
                 rostros = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).multi_face_landmarks or []
-                iris = obtener_iris(rostros, (frame.shape[1], frame.shape[0]))
+                ojos = obtener_iris_por_ojo(rostros, (frame.shape[1], frame.shape[0]))
+                iris = None if ojos is None else ojos.mean(axis=0)
+                postura = obtener_postura(rostros, (frame.shape[1], frame.shape[0])) if mirada else None
                 ahora = time.perf_counter()
+                xy = None
                 if iris is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
+                    antes = len(captura.muestras)
                     resultado = captura.actualizar(iris, ahora)
+                    if len(captura.muestras) > antes and postura is not None:
+                        posturas_punto.append(postura)
                     if resultado is not None:
+                        emitir('punto_calibracion', punto=len(puntos)+1, intento=intento,
+                               objetivo=OBJETIVOS[len(puntos)], aceptado=resultado.posicion is not None,
+                               motivo=resultado.motivo, muestras=len(captura.muestras), total=captura.total,
+                               dispersion=np.std(captura.muestras, axis=0) if captura.muestras else None,
+                               iris=resultado.posicion,
+                               postura_mediana=np.median(posturas_punto, axis=0) if posturas_punto else None)
                         if resultado.posicion is not None:
                             puntos.append(resultado.posicion)
+                            if posturas_punto:
+                                posturas_aceptadas.append(np.median(posturas_punto, axis=0))
                             intento = 1
                             aviso = ''
                         else:
@@ -104,14 +128,20 @@ def ejecutar(args):
                         if len(puntos) == 9:
                             try:
                                 ajuste = Calibracion().ajustar(puntos)
+                                referencia_postura = np.median(posturas_aceptadas, axis=0) if posturas_aceptadas else None
+                                emitir('calibracion_lista', puntos=np.asarray(puntos), objetivos=OBJETIVOS,
+                                       media=ajuste.media, escala=ajuste.escala, coeficientes=ajuste.coeficientes,
+                                       referencia_postura=referencia_postura)
                                 print('Calibración lista. Vuelve al navegador para ver el mapa.')
                             except ValueError as error:
                                 print(error)
                                 ajuste = None
+                                emitir('calibracion_fallida', motivo=str(error))
                             calibrando = False
                             cv2.destroyWindow(objetivo_ventana)
                         else:
                             captura = CapturaPunto(ahora)
+                        posturas_punto = []
                     if calibrando:
                         pantalla = np.zeros((alto, ancho, 3), np.uint8)
                         x, y = OBJETIVOS[len(puntos)]
@@ -149,9 +179,18 @@ def ejecutar(args):
                         cv2.circle(vista, (round(centro.x*frame.shape[1]), round(centro.y*frame.shape[0])),
                                    3, (0, 255, 255), -1)
                 estado = 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
+                estado_postura, delta_postura = comparar_postura(postura, referencia_postura)
                 if mirada:
                     texto_filtro = 'CALIBRACION SIN FILTRO' if calibrando else f'S: suavizado {"ON" if suavizado else "OFF"}'
                     cv2.putText(vista, texto_filtro, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
+                    cv2.putText(vista, estado_postura, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, .5,
+                                (0, 180, 255) if estado_postura == 'POSTURA CAMBIO' else (255, 255, 255), 1)
+                resumen.actualizar(ahora, iris, estado=estado, ojos=ojos, suavizado=suavizado,
+                                   resolucion_camara=[frame.shape[1], frame.shape[0]],
+                                   postura=postura, estado_postura=estado_postura, delta_postura=delta_postura,
+                                   estimacion_px=xy*np.array([ancho-1, alto-1]) if xy is not None else None,
+                                   dentro_pantalla=bool(((xy >= 0) & (xy <= 1)).all()) if xy is not None else None,
+                                   brillo_frame=round(float(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).mean()), 1))
                 cv2.putText(vista, f'{estado} | Q: salir', (10, vista.shape[0]-15), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                 cv2.imshow(ventana, vista)
                 tecla = cv2.waitKey(1) & 0xff
@@ -165,6 +204,9 @@ def ejecutar(args):
                     filtro.reiniciar()
                     ajuste, puntos = None, []
                     intento, aviso = 1, ''
+                    referencia_postura = None
+                    posturas_punto, posturas_aceptadas = [], []
+                    emitir('calibracion_inicio')
                     calibrando = True
                     cv2.namedWindow(objetivo_ventana, cv2.WINDOW_NORMAL)
                     cv2.setWindowProperty(objetivo_ventana, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)

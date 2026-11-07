@@ -6,8 +6,8 @@ OJOS = ((468, 33, 133, 159, 145), (473, 362, 263, 386, 374))
 CENTROS_IRIS = tuple(ojo[0] for ojo in OJOS)
 
 
-def obtener_iris(rostros, tamano_frame):
-    """Promedio (x, y) de ambos iris en sus ojos; None si no son utilizables.
+def obtener_iris_por_ojo(rostros, tamano_frame):
+    """Posiciones (x, y) de ambos iris; None si no son utilizables.
 
     tamano_frame es (ancho, alto). Los ejes se construyen en píxeles para
     respetar la relación de aspecto. Ambos ejes se normalizan por el ancho
@@ -41,4 +41,9 @@ def obtener_iris(rostros, tamano_frame):
         centro_ojo = (izquierda + derecha) / 2
         posiciones.append([(iris - izquierda) @ eje_x / ancho,
                            .5 + (iris - centro_ojo) @ eje_y / ancho])
-    return np.mean(posiciones, axis=0)
+    return np.asarray(posiciones)
+
+
+def obtener_iris(rostros, tamano_frame):
+    posiciones = obtener_iris_por_ojo(rostros, tamano_frame)
+    return None if posiciones is None else posiciones.mean(axis=0)

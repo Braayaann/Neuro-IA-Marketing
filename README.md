@@ -47,6 +47,24 @@ El suavizado adaptativo One Euro está activado por defecto y se aplica al prome
 
 Su configuración inicial es corte mínimo de 1 Hz, beta de 10 y corte de velocidad de 1 Hz, con tiempos reales entre muestras. Son valores de partida que requieren prueba con cámara. El filtro introduce retraso, no garantiza inmovilidad, no rechaza saltos aislados ni corrige desvíos de calibración. Referencia del algoritmo: [One Euro, Casiez et al.](https://gery.casiez.net/1euro/).
 
+## Postura y datos para revisar las pruebas
+
+La vista de cámara muestra `POSTURA SIMILAR`, `POSTURA CAMBIO`, `SIN REFERENCIA` o `SIN POSTURA`. La referencia es la mediana de las posturas de los puntos aceptados de la última calibración. Cambiar más de 8 grados, desplazar el centro más de un 15% del ancho de referencia del rostro o cambiar su ancho aparente más de un 15% activa el aviso. Estos umbrales son iniciales. El aviso no mueve, bloquea ni corrige el cursor.
+
+La orientación se estima con `solvePnP`, un rostro genérico y parámetros aproximados de cámara. Los ángulos no están validados físicamente y no representan la dirección de los ojos. El tamaño aparente no es una distancia en centímetros.
+
+La terminal emite líneas JSON con prefijo `[NEURO]`: configuración inicial, inicio de calibración, resultado de cada punto, parámetros del ajuste y un resumen de seguimiento cada dos segundos. Puedes copiar desde `inicio` hasta los resúmenes de la prueba y pegarlos en el chat. Indica también qué estabas mirando y si moviste la cabeza o cambiaste la luz.
+
+- `ojos`: posiciones relativas de los iris 468 y 473, en ese orden; `iris`: su promedio sin suavizar.
+- `dispersion_iris`: desviación estándar de la señal sin suavizar en los últimos dos segundos; incluye los movimientos voluntarios.
+- `fps` y `validas_pct`: tasa del bucle y porcentaje de fotogramas con señal ocular válida en ese intervalo.
+- `postura` y `referencia_postura`: `[pitch, yaw, roll, centro_x, centro_y, ancho]`; grados aproximados y coordenadas normalizadas de imagen.
+- `delta_postura`: diferencias angulares, desplazamientos x/y en anchos de rostro de referencia y cambio proporcional de ancho.
+- `estimacion_px`: última predicción utilizada por el seguimiento, con el suavizado seleccionado. Puede quedar fuera de pantalla; `dentro_pantalla` lo indica. Es `null` si el seguimiento está pausado, calibrando o sin señal/ajuste.
+- `brillo_frame`: promedio de gris de toda la imagen (0–255). Es una referencia contextual, no una medición de iluminación de los ojos ni de lux.
+
+Estos datos ayudan a estudiar postura, detección y calibración; no calculan el error real de mirada sin un objetivo conocido. No se guardan imágenes ni videos, ni se crean archivos de registro automáticamente.
+
 ## Instalación
 
 Python 3.12 de 64 bits en Windows:
