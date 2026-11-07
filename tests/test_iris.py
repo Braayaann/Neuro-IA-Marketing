@@ -28,11 +28,32 @@ class SeguimientoBinocularTest(unittest.TestCase):
 
     def test_ambos_ojos_contribuyen_a_la_senal(self):
         for posiciones in (((.2, .3), (.6, .9)), ((.6, .9), (.2, .3))):
-            np.testing.assert_allclose(obtener_iris([rostro(posiciones)], (640, 480)), [.4, .6])
+            np.testing.assert_allclose(obtener_iris([rostro(posiciones)], (640, 480)), [.4, .53])
 
     def test_movimiento_de_iris_con_rostro_fijo(self):
         for punto in ((.2, .3), (.8, .7)):
-            np.testing.assert_allclose(obtener_iris([rostro((punto, punto))], (640, 480)), punto)
+            esperado = [punto[0], .5 + .3*(punto[1]-.5)]
+            np.testing.assert_allclose(obtener_iris([rostro((punto, punto))], (640, 480)), esperado)
+
+    def test_cambios_de_parpados_abiertos_no_mueven_senal(self):
+        original = obtener_iris([rostro(((.3, .7), (.6, .8)))], (640, 480))
+        for arriba, abajo in ((159, 145), (386, 374)):
+            for superior, inferior in ((.49, .515), (.475, .51)):
+                r = rostro(((.3, .7), (.6, .8)))
+                r.landmark[arriba].y = superior
+                r.landmark[abajo].y = inferior
+                np.testing.assert_allclose(obtener_iris([r], (640, 480)), original)
+
+    def test_cambios_de_parpados_no_mueven_prediccion_calibrada(self):
+        muestras = [obtener_iris([rostro((p, p))], (640, 480)) for p in OBJETIVOS]
+        ajuste = Calibracion().ajustar(muestras)
+        punto = (.35, .65)
+        r = rostro((punto, punto))
+        r.landmark[159].y = .49
+        r.landmark[145].y = .515
+        r.landmark[386].y = .485
+        r.landmark[374].y = .51
+        np.testing.assert_allclose(ajuste.predecir(obtener_iris([r], (640, 480))), punto)
 
     def test_traslacion_y_escala_no_cambian_senal(self):
         posiciones = ((.3, .6), (.5, .8))

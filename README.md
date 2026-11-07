@@ -2,7 +2,7 @@
 
 Prototipo local para Windows: iris con MediaPipe FaceMesh y expresiones faciales con RMN. Una sola captura de cámara para ambos. No usa L2CS ni estima la mirada mediante ángulos de la cabeza.
 
-El seguimiento usa los centros de ambos iris (468 y 473) respecto a las comisuras y los párpados de cada ojo. Promedia sus coordenadas relativas y utiliza esa señal en la calibración de nueve puntos. La cámara muestra un punto amarillo en cada iris cuando ambos ojos son utilizables. Solo se admite una persona para el seguimiento.
+El seguimiento usa los centros de ambos iris (468 y 473) respecto a las comisuras de cada ojo. Normaliza ambos ejes por el ancho del ojo y mide la posición vertical respecto al punto medio de las comisuras, para que la apertura de los párpados no cambie directamente la señal. Los párpados solo permiten comprobar la apertura mínima. Promedia las coordenadas relativas de ambos iris y utiliza esa señal en la calibración de nueve puntos. La cámara muestra un punto amarillo en cada iris cuando ambos ojos son utilizables. Solo se admite una persona para el seguimiento.
 
 ## Ejecutar
 

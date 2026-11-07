@@ -10,7 +10,9 @@ def obtener_iris(rostros, tamano_frame):
     """Promedio (x, y) de ambos iris en sus ojos; None si no son utilizables.
 
     tamano_frame es (ancho, alto). Los ejes se construyen en píxeles para
-    respetar la relación de aspecto: x entre comisuras, y entre párpados.
+    respetar la relación de aspecto. Ambos ejes se normalizan por el ancho
+    entre comisuras; y se centra en su punto medio con un desplazamiento .5.
+    Los párpados solo se usan para comprobar la apertura mínima del ojo.
     La señal es relativa al ojo, no una coordenada de pantalla ni un ángulo.
     """
     if len(rostros) != 1 or len(rostros[0].landmark) < 478:
@@ -36,6 +38,7 @@ def obtener_iris(rostros, tamano_frame):
         # Conserva el umbral básico de apertura del prototipo para ambos ojos.
         if apertura < .004 * dimensiones[1]:
             return None
+        centro_ojo = (izquierda + derecha) / 2
         posiciones.append([(iris - izquierda) @ eje_x / ancho,
-                           (iris - superior) @ eje_y / apertura])
+                           .5 + (iris - centro_ojo) @ eje_y / ancho])
     return np.mean(posiciones, axis=0)
