@@ -37,7 +37,7 @@ class FlujoDiagnosticoTest(unittest.TestCase):
                 return ord('c')
             if mouse.moveTo.called:
                 return ord('q')
-            self.assertLess(estado['frames'], 1200, 'La calibración no terminó.')
+            self.assertLess(estado['frames'], 1800, 'La calibración no terminó.')
             return -1
 
         def circulo(imagen, centro, *args):
@@ -71,6 +71,11 @@ class FlujoDiagnosticoTest(unittest.TestCase):
         puntos = [d for d in datos if d['evento'] == 'punto_calibracion']
         self.assertEqual(len(puntos), 9)
         self.assertTrue(all(d['aceptado'] for d in puntos))
+        validacion = [d for d in datos if d['evento'] == 'punto_validacion']
+        self.assertEqual(len(validacion), 5)
+        seleccion = next(d for d in datos if d['evento'] == 'validacion_lista')
+        self.assertEqual(seleccion['elegido'], 'lineal')
+        self.assertLess(seleccion['metricas']['lineal']['error_medio_px'], 1.)
         referencia = next(d for d in datos if d['evento'] == 'calibracion_lista')['referencia_postura']
         np.testing.assert_allclose(referencia, postura)
         self.assertTrue(any(d['evento'] == 'seguimiento' for d in datos))

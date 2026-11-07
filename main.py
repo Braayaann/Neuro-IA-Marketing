@@ -9,7 +9,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from mirada.calibracion import Calibracion, OBJETIVOS
+from mirada.calibracion import Calibracion, OBJETIVOS, VALIDACION, evaluar, seleccionar_ajuste
 from mirada.captura import CapturaPunto
 from mirada.iris import CENTROS_IRIS, obtener_iris_por_ojo
 from mirada.postura import obtener_postura, comparar_postura
@@ -68,6 +68,9 @@ def ejecutar(args):
         raise RuntimeError('No se pudo abrir la cámara. Revisa permisos y otras aplicaciones.')
     ajuste = None
     calibrando = False
+    validando = False
+    candidatos, pruebas = {}, []
+    metodo_ajuste = getattr(args, 'ajuste', 'auto')
     puntos = []
     captura = None
     intento = 1
@@ -85,6 +88,7 @@ def ejecutar(args):
     inicio_sesion = time.perf_counter()
     resumen = ResumenTerminal(inicio_sesion)
     emitir('inicio', version=1, modo=args.modo, camara=args.camara,
+           ajuste_solicitado=metodo_ajuste,
            pantalla=[ancho, alto] if mirada else None, mediapipe=mp.__version__, opencv=cv2.__version__,
            suavizado=suavizado, filtro={'corte_minimo': filtro.corte_minimo, 'beta': filtro.beta},
            umbrales_postura={'grados': 8, 'desplazamiento_anchos_cara': .15, 'cambio_ancho': .15})
@@ -104,51 +108,77 @@ def ejecutar(args):
                 if iris is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
+                    objetivos = VALIDACION if validando else OBJETIVOS
+                    posiciones = pruebas if validando else puntos
                     antes = len(captura.muestras)
                     resultado = captura.actualizar(iris, ahora)
                     if len(captura.muestras) > antes and postura is not None:
                         posturas_punto.append(postura)
                     if resultado is not None:
-                        emitir('punto_calibracion', punto=len(puntos)+1, intento=intento,
-                               objetivo=OBJETIVOS[len(puntos)], aceptado=resultado.posicion is not None,
+                        emitir('punto_validacion' if validando else 'punto_calibracion', punto=len(posiciones)+1, intento=intento,
+                               objetivo=objetivos[len(posiciones)], aceptado=resultado.posicion is not None,
                                motivo=resultado.motivo, muestras=len(captura.muestras), total=captura.total,
                                dispersion=np.std(captura.muestras, axis=0) if captura.muestras else None,
                                iris=resultado.posicion,
                                postura_mediana=np.median(posturas_punto, axis=0) if posturas_punto else None)
                         if resultado.posicion is not None:
-                            puntos.append(resultado.posicion)
-                            if posturas_punto:
+                            posiciones.append(resultado.posicion)
+                            if posturas_punto and not validando:
                                 posturas_aceptadas.append(np.median(posturas_punto, axis=0))
                             intento = 1
                             aviso = ''
                         else:
                             intento += 1
                             aviso = resultado.motivo
-                            print(f'Punto {len(puntos)+1}: {aviso} Se repite.')
-                        if len(puntos) == 9:
+                            print(f'Punto {len(posiciones)+1}: {aviso} Se repite.')
+                        if len(posiciones) == len(objetivos):
                             try:
-                                ajuste = Calibracion().ajustar(puntos)
-                                referencia_postura = np.median(posturas_aceptadas, axis=0) if posturas_aceptadas else None
-                                emitir('calibracion_lista', puntos=np.asarray(puntos), objetivos=OBJETIVOS,
-                                       media=ajuste.media, escala=ajuste.escala, coeficientes=ajuste.coeficientes,
-                                       referencia_postura=referencia_postura)
-                                print('Calibración lista. Vuelve al navegador para ver el mapa.')
+                                if not validando:
+                                    candidatos = {'lineal': Calibracion('lineal').ajustar(puntos)}
+                                    try:
+                                        candidatos['cuadratico'] = Calibracion('cuadratico').ajustar(puntos)
+                                    except ValueError as error:
+                                        emitir('ajuste_descartado', metodo='cuadratico', motivo=str(error))
+                                    if metodo_ajuste != 'auto' and metodo_ajuste not in candidatos:
+                                        raise ValueError('El ajuste solicitado no pudo calcularse. Repite la calibración.')
+                                    referencia_postura = np.median(posturas_aceptadas, axis=0) if posturas_aceptadas else None
+                                    emitir('calibracion_capturada', puntos=np.asarray(puntos), objetivos=OBJETIVOS,
+                                           referencia_postura=referencia_postura)
+                                    validando = True
+                                    print('Nueve puntos capturados. Ahora comprueba cinco puntos nuevos.')
+                                else:
+                                    metricas = {nombre: evaluar(m, pruebas, VALIDACION, (ancho, alto))
+                                                for nombre, m in candidatos.items()}
+                                    elegido = seleccionar_ajuste(metricas) if metodo_ajuste == 'auto' else metodo_ajuste
+                                    ajuste = candidatos[elegido]
+                                    emitir('validacion_lista', metricas=metricas, elegido=elegido,
+                                           muestras=np.asarray(pruebas), objetivos=VALIDACION)
+                                    emitir('calibracion_lista', metodo=elegido, puntos=np.asarray(puntos), objetivos=OBJETIVOS,
+                                           media=ajuste.media, escala=ajuste.escala, coeficientes=ajuste.coeficientes,
+                                           referencia_postura=referencia_postura)
+                                    print(f'Ajuste {elegido}: error medio de comprobación '
+                                          f'{metricas[elegido]["error_medio_px"]:.0f} px. Vuelve al navegador.')
+                                    calibrando = validando = False
                             except ValueError as error:
                                 print(error)
                                 ajuste = None
                                 emitir('calibracion_fallida', motivo=str(error))
-                            calibrando = False
+                                calibrando = validando = False
+                        if not calibrando:
                             cv2.destroyWindow(objetivo_ventana)
                         else:
                             captura = CapturaPunto(ahora)
                         posturas_punto = []
                     if calibrando:
                         pantalla = np.zeros((alto, ancho, 3), np.uint8)
-                        x, y = OBJETIVOS[len(puntos)]
+                        objetivos = VALIDACION if validando else OBJETIVOS
+                        indice_punto = len(pruebas) if validando else len(puntos)
+                        x, y = objetivos[indice_punto]
                         fase, restante = captura.estado(ahora)
                         color = (0, 230, 255) if fase == 'PREPARATE' else (0, 220, 0)
                         cv2.circle(pantalla, (round(x*(ancho-1)), round(y*(alto-1))), 16, color, -1)
-                        mensajes = [(30, f'Punto {len(puntos)+1}/9 | Intento {intento} | Mira el punto sin mover la cabeza | Q: salir'),
+                        etapa = 'COMPROBACION' if validando else 'CALIBRACION'
+                        mensajes = [(30, f'{etapa} {indice_punto+1}/{len(objetivos)} | Intento {intento} | Cabeza estable | Q: salir'),
                                     (alto-35, f'{fase}: {restante:.1f}s | Muestras validas: {len(captura.muestras)}')]
                         if aviso:
                             mensajes.append((alto-10, 'Se repite: ' + aviso))
@@ -178,7 +208,7 @@ def ejecutar(args):
                         centro = rostros[0].landmark[indice]
                         cv2.circle(vista, (round(centro.x*frame.shape[1]), round(centro.y*frame.shape[0])),
                                    3, (0, 255, 255), -1)
-                estado = 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
+                estado = 'VALIDANDO' if validando else 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
                 estado_postura, delta_postura = comparar_postura(postura, referencia_postura)
                 if mirada:
                     texto_filtro = 'CALIBRACION SIN FILTRO' if calibrando else f'S: suavizado {"ON" if suavizado else "OFF"}'
@@ -203,6 +233,7 @@ def ejecutar(args):
                 if c and not anterior_c:
                     filtro.reiniciar()
                     ajuste, puntos = None, []
+                    validando, candidatos, pruebas = False, {}, []
                     intento, aviso = 1, ''
                     referencia_postura = None
                     posturas_punto, posturas_aceptadas = [], []
@@ -231,6 +262,8 @@ def main():
     parser.add_argument('--sin-calibracion', action='store_true', help='Conversión directa de la señal relativa binocular; sin precisión de pantalla.')
     parser.add_argument('--clic-parpadeo', action='store_true', help='Habilita los clics del ejemplo original.')
     parser.add_argument('--sin-suavizado', action='store_true', help='Inicia sin filtro temporal; S permite alternarlo durante la sesión.')
+    parser.add_argument('--ajuste', choices=('auto', 'lineal', 'cuadratico'), default='auto',
+                        help='Auto compara ambos ajustes en cinco puntos nuevos; se calibra con nueve.')
     parser.add_argument('--diagnostico', action='store_true', help='Prueba modelos sin cámara ni movimiento del cursor.')
     try:
         ejecutar(parser.parse_args())

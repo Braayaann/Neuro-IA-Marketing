@@ -14,7 +14,7 @@ Desde la raíz del repositorio, en PowerShell:
 
 También puedes abrir `ejecutar.bat`. Se abre el HTML del cliente y una vista de cámara.
 
-- `C`: calibrar mirando nueve puntos. Amarillo: preparación (1,2 s); verde: captura (2,4 s). Mantén la mirada en el punto durante ambas etapas. Después vuelve a la página del navegador.
+- `C`: calibrar mirando nueve puntos y comprobar cinco puntos nuevos. Amarillo: preparación (1,2 s); verde: captura (2,4 s). Mantén la mirada en el punto durante ambas etapas. Después vuelve a la página del navegador.
 - `P`: pausar o reanudar el movimiento del cursor.
 - `S`: activar o desactivar el suavizado durante la misma sesión, incluso desde el navegador. La cámara muestra su estado.
 - `Q`: salir, incluso cuando el navegador tiene el foco.
@@ -24,7 +24,11 @@ Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada
 
 Cada punto exige al menos 20 muestras estables, detección válida en el 75% de los fotogramas de captura y estabilidad en al menos el 80% de las muestras válidas. Se descartan las muestras alejadas de la mediana más de 0,012 en horizontal o 0,008 en vertical (unidades relativas al ancho del ojo). Las muestras aceptadas deben cubrir al menos 1,4 s y cinco de seis intervalos de la captura; también se comprueba que no haya un desplazamiento excesivo entre el inicio y el final. Son umbrales iniciales que requieren prueba con cámara.
 
-Si falla alguna condición, se repite el mismo punto y se muestra el motivo y el número de intento. Puedes pulsar C para empezar de nuevo o Q para salir. La señal permanece sin suavizar durante la captura y la transformación lineal de nueve puntos no cambia. Estabilidad no equivale a precisión: el sistema no comprueba por sí solo que estés mirando el objetivo.
+Si falla alguna condición, se repite el mismo punto y se muestra el motivo y el número de intento. Puedes pulsar C para empezar de nuevo o Q para salir. La señal permanece sin suavizar durante la captura. Estabilidad no equivale a precisión: el sistema no comprueba por sí solo que estés mirando el objetivo.
+
+Con los nueve puntos se ajustan una transformación lineal y otra cuadrática regularizada (ridge de 0,01 en coordenadas estandarizadas, sin penalizar el intercepto). Después se capturan cinco posiciones distintas para comparar sus errores en píxeles. `--ajuste auto` elige la cuadrática solo si reduce el error medio al menos 5 píxeles y un 5%; en otro caso conserva la lineal. Si no puede calcular la cuadrática, mantiene la lineal. Estos cinco puntos se usan para seleccionar el ajuste: su error es una comprobación de selección, no una evaluación final independiente ni una garantía de precisión.
+
+Puedes forzar `--ajuste lineal` o `--ajuste cuadratico` para comparar sesiones. La terminal registra los errores de ambos, el método seleccionado y sus parámetros; las predicciones fuera de pantalla no se recortan para calcular el error.
 
 ```powershell
 # Solo el seguimiento por iris
