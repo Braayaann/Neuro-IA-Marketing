@@ -1,8 +1,8 @@
 # Neuro IA Marketing
 
-Prototipo local para Windows: seguimiento de mirada con iris binocular de MediaPipe o con L2CS-Net/Gaze360 preentrenado, y expresiones faciales con RMN. Una sola captura de cámara para todos los módulos. La orientación de cabeza solo genera avisos; no sustituye a la mirada.
+Prototipo local para Windows con seguimiento de mirada por iris binocular de MediaPipe o L2CS-Net/Gaze360 y expresiones faciales con RMN. Todos los módulos comparten una cámara.
 
-El seguimiento usa los centros de ambos iris (468 y 473) respecto a las comisuras de cada ojo. Normaliza ambos ejes por el ancho del ojo y mide la posición vertical respecto al punto medio de las comisuras, para que la apertura de los párpados no cambie directamente la señal. Los párpados solo permiten comprobar la apertura mínima. Promedia las coordenadas relativas de ambos iris y utiliza esa señal en la calibración de nueve puntos. La cámara muestra un punto amarillo en cada iris cuando ambos ojos son utilizables. Solo se admite una persona para el seguimiento.
+El seguimiento normaliza los centros de ambos iris (468 y 473) por el ancho de cada ojo y mide la altura respecto al punto medio de sus comisuras. Comprueba la apertura, el ancho en píxeles y la posición del iris respecto a comisuras y párpados. En modo iris también descarta cambios aislados en la diferencia entre ambos ojos antes de utilizar el promedio binocular. La cámara muestra los centros detectados en amarillo. Solo se admite una persona para el seguimiento.
 
 ## Ejecutar
 
@@ -15,12 +15,13 @@ Desde la raíz del repositorio, en PowerShell:
 También puedes abrir `ejecutar.bat`. Se abre el HTML del cliente y una vista de cámara.
 
 - `C`: calibrar mirando nueve puntos y comprobar cinco puntos nuevos. Amarillo: preparación (1,2 s); verde: captura (2,4 s con iris; 4 s con L2CS). Mantén la mirada en el punto durante ambas etapas. Después vuelve a la página del navegador.
+- `V` comprueba un perfil activo en cuatro puntos. Estima un desplazamiento común con los tres primeros y solo lo guarda si es consistente, moderado y reduce el error en el cuarto. Consulta `[NEURO] control_rapido` para ver las diferencias por punto.
 - `P`: pausar o reanudar el movimiento del cursor.
 - `S`: activar o desactivar el suavizado durante la misma sesión, incluso desde el navegador. La cámara muestra su estado.
 - `Q`: salir, incluso cuando el navegador tiene el foco.
 - Cierra otras aplicaciones que usen la cámara.
 
-Mantén la pantalla principal, su escala y tu posición durante la sesión. Cada persona debe recalibrar. El ajuste se conserva solo durante la ejecución. La calibración ajusta la conversión de coordenadas; no demuestra precisión. El mapa se borra al recargar la página.
+El perfil se guarda en `resultados/calibraciones` por estimador, método solicitado, índice de cámara y resolución de pantalla. Se recupera al volver a abrir el programa con esa configuración. Está pensado para una persona con la misma instalación. Si cambias de persona, pulsa C. Si vuelves otro día y notas un desvío, prueba primero V. El mapa se borra al recargar la página.
 
 Cada punto exige al menos 20 muestras estables, detección válida en el 75% de los fotogramas de captura y estabilidad en al menos el 80% de las muestras válidas. Se descartan las muestras alejadas de la mediana más de 0,012 en horizontal o 0,008 en vertical (unidades relativas al ancho del ojo). Las muestras aceptadas deben cubrir al menos 1,4 s y cinco de seis intervalos de la captura; también se comprueba que no haya un desplazamiento excesivo entre el inicio y el final. Son umbrales iniciales que requieren prueba con cámara.
 
@@ -28,7 +29,9 @@ Con L2CS se aplican los mismos controles a las dos salidas angulares, con tolera
 
 Si falla alguna condición, se repite el mismo punto y se muestra el motivo y el número de intento. Puedes pulsar C para empezar de nuevo o Q para salir. La señal permanece sin suavizar durante la captura. Estabilidad no equivale a precisión: el sistema no comprueba por sí solo que estés mirando el objetivo.
 
-Con los nueve puntos se ajustan una transformación lineal y otra cuadrática regularizada (ridge de 0,01 en coordenadas estandarizadas, sin penalizar el intercepto). Después se capturan cinco posiciones distintas para comparar sus errores en píxeles. `--ajuste auto` elige la cuadrática solo si reduce el error medio al menos 5 píxeles y un 5%; en otro caso conserva la lineal. Si no puede calcular la cuadrática, mantiene la lineal. Estos cinco puntos se usan para seleccionar el ajuste: su error es una comprobación de selección, no una evaluación final independiente ni una garantía de precisión.
+Con los nueve puntos se entrenan los ajustes lineal y cuadrático. El modo automático de iris también prueba una corrección local que pondera los residuos del ajuste lineal por proximidad a las muestras de calibración. La selección usa cinco objetivos nuevos. Parte del lineal y evalúa primero el cuadrático y después el local. Cada candidato debe mejorar el error medio en al menos 5 píxeles y un 5 % respecto al elegido hasta entonces. Se tolera un aumento máximo de 5 píxeles en el peor objetivo. Estos cinco puntos sirven para seleccionar el ajuste. Una medición independiente requiere otras fijaciones.
+
+Durante C y V en modo iris se omiten muestras si la postura disponible se aparta de la de inicio de captura más de 8 grados, un 15 % de ancho facial en posición o un 15 % en escala. C reinicia la captura si necesitas recolocarte. Si la geometría facial no permite estimar la postura, se aplican los controles oculares. El seguimiento libre sigue admitiendo movimiento de cabeza y muestra el aviso de postura.
 
 Puedes forzar `--ajuste lineal` o `--ajuste cuadratico` para comparar sesiones. La terminal registra los errores de ambos, el método seleccionado y sus parámetros; las predicciones fuera de pantalla no se recortan para calcular el error.
 
@@ -109,7 +112,7 @@ Los pesos de mirada se guardan en `mirada/pesos/L2CSNet_gaze360.pkl` (95,8 MB de
 
 `mirada/heatmap.html` deriva del HTML del cliente. `main.py` conserva el fotograma reflejado e incorpora seguimiento binocular relativo, liberación de cámara, calibración y el clasificador RMN. Los clics se habilitan explícitamente. El HTML limita la acumulación cuando deja de recibir movimientos recientes; el mouse físico también dibuja en el mapa. Es una demostración del cursor, no una medición validada del tiempo de atención. Su diseño e imágenes externas requieren conexión a Internet.
 
-El ajuste usa la señal del estimador seleccionado. Debes volver a calibrar al iniciar y al cambiar de estimador. Mover o girar la cabeza todavía puede alterar la estimación. `--sin-calibracion` solo se admite con iris: utiliza directamente la señal relativa, no reproduce la conversión original del cliente ni garantiza cubrir la pantalla. RMN clasifica expresiones faciales y no demuestra la emoción interna de una persona.
+El ajuste usa la señal del estimador seleccionado. Mover o girar la cabeza todavía puede alterar la estimación. `--sin-calibracion` solo se admite con iris y utiliza directamente la señal relativa. RMN clasifica expresiones faciales.
 
 RMN: https://github.com/phamquiluan/ResidualMaskingNetwork
 Pesos: https://huggingface.co/phamquiluan/ResidualMaskingNetwork

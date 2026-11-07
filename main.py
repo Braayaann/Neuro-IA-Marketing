@@ -31,7 +31,7 @@ def cargar_perfil(ruta):
     postura = datos['postura']
     if postura is not None:
         postura = np.asarray(postura, dtype=float)
-        if postura.shape != (6,) or not np.isfinite(postura).all():
+        if postura.shape != (6,) or not np.isfinite(postura).all() or postura[5] <= 0:
             raise ValueError('Postura de referencia inválida')
     return ajuste, postura
 
@@ -150,6 +150,7 @@ def ejecutar(args):
         except (OSError, KeyError, TypeError, ValueError) as error:
             print(f'Perfil ilegible ({error}). Pulsa C para calibrar.')
     posturas_punto, posturas_aceptadas = [], []
+    postura_captura = None
     inicio_sesion = time.perf_counter()
     resumen = ResumenTerminal(inicio_sesion)
     emitir('inicio', version=2, modo=args.modo, camara=args.camara,
@@ -183,7 +184,14 @@ def ejecutar(args):
                     objetivos = CONTROL if control_rapido else VALIDACION if validando else OBJETIVOS
                     posiciones = pruebas if validando else puntos
                     antes = len(captura.muestras)
-                    resultado = captura.actualizar(senal_cruda, ahora)
+                    muestra = senal_cruda
+                    if estimador == 'iris' and postura is not None and senal_cruda is not None:
+                        if postura_captura is None and captura.estado(ahora)[0] == 'CAPTURANDO':
+                            postura_captura = postura.copy()
+                        if comparar_postura(postura, postura_captura)[0] == 'POSTURA CAMBIO':
+                            muestra = None
+                            aviso = 'Vuelve a la postura inicial de esta prueba.'
+                    resultado = captura.actualizar(muestra, ahora)
                     if len(captura.muestras) > antes and postura is not None:
                         posturas_punto.append(postura)
                     if resultado is not None:
@@ -319,9 +327,11 @@ def ejecutar(args):
                 p = mirada and (tecla == ord('p') or keyboard.is_pressed('p'))
                 s = mirada and (tecla == ord('s') or keyboard.is_pressed('s'))
                 iniciar_control = v and not anterior_v and ajuste is not None
-                if not calibrando and ((c and not anterior_c) or iniciar_control):
-                    respaldo = ajuste, referencia_postura
-                    control_rapido = bool(iniciar_control)
+                if (c and not anterior_c) or (iniciar_control and not calibrando):
+                    if not calibrando:
+                        respaldo = ajuste, referencia_postura
+                    control_rapido = bool(iniciar_control and not c)
+                    postura_captura = None
                     filtro.reiniciar()
                     puntos = []
                     validando, candidatos, pruebas = control_rapido, {}, []
@@ -356,7 +366,7 @@ def main():
     parser.add_argument('--clic-parpadeo', action='store_true', help='Habilita los clics del ejemplo original.')
     parser.add_argument('--sin-suavizado', action='store_true', help='Inicia sin filtro temporal; S permite alternarlo durante la sesión.')
     parser.add_argument('--ajuste', choices=('auto', 'lineal', 'cuadratico'), default='auto',
-                        help='Auto compara ambos ajustes en cinco puntos nuevos; se calibra con nueve.')
+                        help='Auto compara los ajustes en cinco puntos nuevos tras calibrar con nueve.')
     parser.add_argument('--estimador', choices=('iris', 'l2cs'), default='iris',
                         help='Iris binocular o modelo preentrenado L2CS/Gaze360. Ambos se calibran con C.')
     parser.add_argument('--dispositivo-mirada', choices=('cpu', 'cuda'), default='cpu',

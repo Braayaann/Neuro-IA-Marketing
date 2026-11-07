@@ -28,10 +28,14 @@ def obtener_postura(rostros, tamano):
     focal = float(max(ancho, alto))
     camara = np.array([[focal, 0, ancho/2], [0, focal, alto/2], [0, 0, 1.]])
     try:
-        ok, rotacion, traslacion = cv2.solvePnP(MODELO, imagen, camara, np.zeros(4))
+        ok, rotacion, traslacion = cv2.solvePnP(MODELO, imagen, camara, None, flags=cv2.SOLVEPNP_SQPNP)
         if not ok or not np.isfinite(rotacion).all() or not np.isfinite(traslacion).all() or traslacion[2, 0] <= 0:
             return None
         matriz, _ = cv2.Rodrigues(rotacion)
+        reproyectada, _ = cv2.projectPoints(MODELO, rotacion, traslacion, camara, None)
+        error = np.linalg.norm(reproyectada.reshape(-1, 2)-imagen, axis=1)
+        if np.sqrt(np.mean(error**2)) > .10*np.linalg.norm(imagen[2]-imagen[3]):
+            return None
         angulos = np.asarray(cv2.RQDecomp3x3(matriz)[0])
     except cv2.error:
         return None

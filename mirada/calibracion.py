@@ -89,7 +89,7 @@ def evaluar(modelo, muestras, objetivos, pantalla):
 
 
 def seleccionar_ajuste(metricas):
-    """Prefiere el lineal salvo mejora cuadrática de al menos 5 px y 5%."""
+    """Exige mejora en la media y controla el peor punto antes de cambiar."""
     if 'lineal' not in metricas:
         return 'cuadratico'
     elegido = 'lineal'

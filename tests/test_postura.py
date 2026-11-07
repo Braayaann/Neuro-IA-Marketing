@@ -18,6 +18,11 @@ def proyectar(rotacion):
 
 
 class PosturaTest(unittest.TestCase):
+    def test_descarta_ajuste_incompatible_con_landmarks(self):
+        rostro = proyectar(np.zeros(3))
+        rostro.landmark[1].x += .2
+        self.assertIsNone(obtener_postura([rostro], (640, 480)))
+
     def test_recupera_rotaciones_sinteticas(self):
         for eje in range(3):
             for grados in (-20., 0., 20.):

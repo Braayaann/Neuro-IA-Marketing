@@ -23,7 +23,10 @@ class FlujoDiagnosticoTest(unittest.TestCase):
     def test_control_rapido_corrige_y_persiste(self):
         self.comprobar_flujo('iris', control=True)
 
-    def comprobar_flujo(self, estimador, control=False):
+    def test_giro_transitorio_repite_solo_el_punto_afectado(self):
+        self.comprobar_flujo('iris', giro=True)
+
+    def comprobar_flujo(self, estimador, control=False, giro=False):
         estado = {'tiempo': 0., 'objetivo': np.array([.12, .12]), 'frames': 0}
         camara = MagicMock()
         camara.isOpened.return_value = True
@@ -37,6 +40,12 @@ class FlujoDiagnosticoTest(unittest.TestCase):
         mouse.size.return_value = (1280, 720)
         teclado.is_pressed.return_value = False
         postura = np.array([0., 0., 0., .5, .5, .2])
+
+        def observar_postura(*args):
+            actual = postura.copy()
+            if giro and 55 < estado['frames'] < 105:
+                actual[1] += 15
+            return actual
 
         def reloj():
             estado['tiempo'] += 1/30
@@ -81,7 +90,7 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             reemplazos = {'cv2.VideoCapture': MagicMock(return_value=camara),
                           'mp.solutions.face_mesh.FaceMesh': MagicMock(return_value=contexto),
                           'time.perf_counter': reloj, 'obtener_iris_por_ojo': senal,
-                          'obtener_postura': MagicMock(return_value=postura),
+                          'obtener_postura': observar_postura,
                           'cv2.waitKey': tecla, 'cv2.circle': circulo,
                           'cv2.getWindowProperty': MagicMock(return_value=1)}
             for nombre, reemplazo in reemplazos.items():
@@ -101,8 +110,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
         datos = [json.loads(linea[len('[NEURO] '):]) for linea in salida.getvalue().splitlines()
                  if linea.startswith('[NEURO] ')]
         puntos = [d for d in datos if d['evento'] == 'punto_calibracion']
-        self.assertEqual(len(puntos), 9)
-        self.assertTrue(all(d['aceptado'] for d in puntos))
+        self.assertEqual(sum(d['aceptado'] for d in puntos), 9)
+        self.assertEqual([d['punto'] for d in puntos if not d['aceptado']], [1] if giro else [])
         validacion = [d for d in datos if d['evento'] == 'punto_validacion']
         self.assertEqual(len(validacion), 5)
         seleccion = next(d for d in datos if d['evento'] == 'validacion_lista')
