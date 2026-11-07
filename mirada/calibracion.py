@@ -3,6 +3,28 @@ import numpy as np
 
 OBJETIVOS = [(x, y) for y in (.12, .5, .88) for x in (.12, .5, .88)]
 VALIDACION = [(.25, .25), (.75, .25), (.25, .75), (.75, .75), (.5, .65)]
+CONTROL = [(.22, .28), (.78, .32), (.48, .8), (.62, .54)]
+
+
+def corregir_deriva(ajuste, muestras, pantalla):
+    """Estima traslación con tres fijaciones y comprueba en una cuarta."""
+    antes = evaluar(ajuste, muestras, CONTROL, pantalla)
+    errores = antes['diferencias_px']
+    sesgo = np.median(errores[:3], axis=0)
+    magnitud = np.linalg.norm(sesgo)
+    despues = np.linalg.norm(errores-sesgo, axis=1)
+    diagonal = np.linalg.norm(pantalla)
+    if magnitud < max(5., .004*diagonal):
+        motivo = 'El desplazamiento es pequeño.'
+    elif magnitud > .12*diagonal or np.linalg.norm(errores[:3]-sesgo, axis=1).max() > max(.008*diagonal, .35*magnitud):
+        motivo = 'El desvío es excesivo o cambia según la zona.'
+    elif despues[-1] + max(5., .2*antes['errores_px'][-1]) > antes['errores_px'][-1]:
+        motivo = 'El cuarto objetivo no confirma la mejora.'
+    else:
+        ajuste.desplazamiento -= sesgo/(np.asarray(pantalla)-1)
+        motivo = 'Corrección confirmada en el cuarto objetivo.'
+        return True, motivo, antes, despues
+    return False, motivo, antes, despues
 
 
 class Calibracion:

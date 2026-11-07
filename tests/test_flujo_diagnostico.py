@@ -20,7 +20,10 @@ class FlujoDiagnosticoTest(unittest.TestCase):
     def test_l2cs_calibra_angulos_y_comprueba_sin_tratarlos_como_pixeles(self):
         self.comprobar_flujo('l2cs')
 
-    def comprobar_flujo(self, estimador):
+    def test_control_rapido_corrige_y_persiste(self):
+        self.comprobar_flujo('iris', control=True)
+
+    def comprobar_flujo(self, estimador, control=False):
         estado = {'tiempo': 0., 'objetivo': np.array([.12, .12]), 'frames': 0}
         camara = MagicMock()
         camara.isOpened.return_value = True
@@ -44,6 +47,12 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             if estado['frames'] == 1:
                 return ord('c')
             if mouse.moveTo.called:
+                if control and not estado.get('control'):
+                    estado['control'] = True
+                    return ord('v')
+                if control and mouse.moveTo.call_count == 1:
+                    self.assertLess(estado['frames'], 4000)
+                    return -1
                 return ord('q')
             self.assertLess(estado['frames'], 3000, 'La calibración no terminó.')
             return -1
@@ -55,6 +64,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
 
         def senal(*args):
             iris = np.array([.4, .48])+estado['objetivo']*[.1, .04]
+            if estado.get('control'):
+                iris += [.005, 0.]
             return np.array([iris, iris])
 
         salida = io.StringIO()
@@ -85,6 +96,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             restaurado, referencia = main.cargar_perfil(ruta)
             np.testing.assert_allclose(referencia, postura)
             self.assertTrue(np.isfinite(restaurado.coeficientes).all())
+            if control:
+                np.testing.assert_allclose(restaurado.desplazamiento, [-.05, 0], atol=.002)
         datos = [json.loads(linea[len('[NEURO] '):]) for linea in salida.getvalue().splitlines()
                  if linea.startswith('[NEURO] ')]
         puntos = [d for d in datos if d['evento'] == 'punto_calibracion']
@@ -104,5 +117,5 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             self.assertTrue(modelo_mirada.estimar.called)
         else:
             modelo_mirada.estimar.assert_not_called()
-        mouse.moveTo.assert_called_once()
+        self.assertEqual(mouse.moveTo.call_count, 2 if control else 1)
         camara.release.assert_called_once()

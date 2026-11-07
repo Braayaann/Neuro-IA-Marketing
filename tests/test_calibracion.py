@@ -2,10 +2,25 @@ import unittest
 
 import numpy as np
 
-from mirada.calibracion import Calibracion, OBJETIVOS, VALIDACION, evaluar, seleccionar_ajuste
+from mirada.calibracion import Calibracion, CONTROL, OBJETIVOS, VALIDACION, corregir_deriva, evaluar, seleccionar_ajuste
 
 
 class CalibracionTest(unittest.TestCase):
+    def test_deriva_uniforme_verificada_y_sin_doble_correccion(self):
+        modelo = Calibracion().ajustar(OBJETIVOS)
+        muestras = np.array(CONTROL) + [.04, -.03]
+        self.assertTrue(corregir_deriva(modelo, muestras, (1000, 800))[0])
+        np.testing.assert_allclose(modelo.predecir(muestras[-1]), CONTROL[-1])
+        self.assertFalse(corregir_deriva(modelo, muestras, (1000, 800))[0])
+
+    def test_deriva_variable_o_no_confirmada_conserva_perfil(self):
+        for indice in (1, 3):
+            muestras = np.array(CONTROL) + [.05, 0]
+            muestras[indice, 0] -= .05
+            modelo = Calibracion().ajustar(OBJETIVOS)
+            self.assertFalse(corregir_deriva(modelo, muestras, (1000, 800))[0])
+            np.testing.assert_array_equal(modelo.desplazamiento, [0, 0])
+
     def test_ajuste_local_con_distorsion_limitada_a_una_zona(self):
         def deformar(puntos):
             puntos = np.array(puntos)

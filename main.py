@@ -11,7 +11,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from mirada.calibracion import Calibracion, OBJETIVOS, VALIDACION, evaluar, seleccionar_ajuste
+from mirada.calibracion import Calibracion, CONTROL, OBJETIVOS, VALIDACION, corregir_deriva, evaluar, seleccionar_ajuste
 from mirada.captura import CapturaPunto
 from mirada.iris import CENTROS_IRIS, ConsistenciaBinocular, obtener_iris_por_ojo
 from mirada.postura import obtener_postura, comparar_postura
@@ -24,6 +24,10 @@ BASE = Path(__file__).resolve().parent
 def cargar_perfil(ruta):
     datos = json.loads(ruta.read_text(encoding='utf-8'))
     ajuste = Calibracion(datos['metodo']).ajustar(datos['puntos'])
+    delta = np.asarray(datos.get('desplazamiento', [0., 0.]), dtype=float)
+    if delta.shape != (2,) or not np.isfinite(delta).all():
+        raise ValueError('Desplazamiento de perfil inválido.')
+    ajuste.desplazamiento = delta
     postura = datos['postura']
     if postura is not None:
         postura = np.asarray(postura, dtype=float)
@@ -34,7 +38,7 @@ def cargar_perfil(ruta):
 
 def guardar_perfil(ruta, ajuste, puntos, postura):
     datos = dict(metodo=ajuste.metodo, puntos=np.asarray(puntos).tolist(),
-                 postura=None if postura is None else postura.tolist())
+                 postura=None if postura is None else postura.tolist(), desplazamiento=ajuste.desplazamiento.tolist())
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=ruta.parent, delete=False) as archivo:
         temporal = Path(archivo.name)
@@ -61,6 +65,15 @@ def clasificar(frame, rostros, modelo):
         indice = int(scores.argmax())
         etiquetas.append(((x1, y1, x2, y2), f'{CLASES[indice]} {scores[indice]:.0%}'))
     return etiquetas
+
+
+def persistir(perfil, ajuste, referencia):
+    if perfil is not None:
+        try:
+            guardar_perfil(perfil, ajuste, ajuste.muestras, referencia)
+            print('Calibración guardada para la próxima sesión.')
+        except OSError as error:
+            print(f'Calibración activa solo en esta sesión: {error}')
 
 
 def ejecutar(args):
@@ -108,6 +121,8 @@ def ejecutar(args):
     ajuste = None
     calibrando = False
     validando = False
+    control_rapido = False
+    anterior_v = False
     candidatos, pruebas = {}, []
     metodo_ajuste = getattr(args, 'ajuste', 'auto')
     puntos = []
@@ -117,7 +132,7 @@ def ejecutar(args):
     ultimo_click = 0.
     ventana = 'Neuro IA - Camara'
     objetivo_ventana = 'Calibracion - mira el punto'
-    print('Q: salir | C: calibrar | P: pausar/reanudar | S: suavizado ON/OFF. Mantén la posición tras calibrar.')
+    print('Q: salir | C: calibrar | V: comprobar y corregir perfil | P: pausa | S: suavizado.')
     pausa = False
     suavizado = not args.sin_suavizado
     filtro = SuavizadoMirada()
@@ -165,14 +180,15 @@ def ejecutar(args):
                 if senal_cruda is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
-                    objetivos = VALIDACION if validando else OBJETIVOS
+                    objetivos = CONTROL if control_rapido else VALIDACION if validando else OBJETIVOS
                     posiciones = pruebas if validando else puntos
                     antes = len(captura.muestras)
                     resultado = captura.actualizar(senal_cruda, ahora)
                     if len(captura.muestras) > antes and postura is not None:
                         posturas_punto.append(postura)
                     if resultado is not None:
-                        emitir('punto_validacion' if validando else 'punto_calibracion', punto=len(posiciones)+1, intento=intento,
+                        evento = 'punto_control' if control_rapido else 'punto_validacion' if validando else 'punto_calibracion'
+                        emitir(evento, punto=len(posiciones)+1, intento=intento,
                                objetivo=objetivos[len(posiciones)], aceptado=resultado.posicion is not None,
                                motivo=resultado.motivo, muestras=len(captura.muestras), total=captura.total,
                                dispersion=np.std(captura.muestras, axis=0) if captura.muestras else None,
@@ -190,7 +206,15 @@ def ejecutar(args):
                             print(f'Punto {len(posiciones)+1}: {aviso} Se repite.')
                         if len(posiciones) == len(objetivos):
                             try:
-                                if not validando:
+                                if control_rapido:
+                                    aplicado, motivo, antes, despues = corregir_deriva(ajuste, pruebas, (ancho, alto))
+                                    emitir('control_rapido', aplicado=aplicado, motivo=motivo, antes=antes,
+                                           errores_propuestos_px=despues, desplazamiento=ajuste.desplazamiento)
+                                    print(motivo)
+                                    if aplicado:
+                                        persistir(perfil, ajuste, referencia_postura)
+                                    control_rapido = calibrando = validando = False
+                                elif not validando:
                                     candidatos = {'lineal': Calibracion('lineal').ajustar(puntos)}
                                     if metodo_ajuste == 'auto' and estimador == 'iris':
                                         candidatos['local'] = Calibracion('local').ajustar(puntos)
@@ -210,12 +234,7 @@ def ejecutar(args):
                                                 for nombre, m in candidatos.items()}
                                     elegido = seleccionar_ajuste(metricas) if metodo_ajuste == 'auto' else metodo_ajuste
                                     ajuste = candidatos[elegido]
-                                    if perfil is not None:
-                                        try:
-                                            guardar_perfil(perfil, ajuste, puntos, referencia_postura)
-                                            print('Calibración guardada para la próxima sesión.')
-                                        except OSError as error:
-                                            print(f'Calibración activa solo en esta sesión: {error}')
+                                    persistir(perfil, ajuste, referencia_postura)
                                     emitir('validacion_lista', metricas=metricas, elegido=elegido,
                                            muestras=np.asarray(pruebas), objetivos=VALIDACION)
                                     emitir('calibracion_lista', metodo=elegido, puntos=np.asarray(puntos), objetivos=OBJETIVOS,
@@ -226,9 +245,9 @@ def ejecutar(args):
                                     calibrando = validando = False
                             except ValueError as error:
                                 print(error)
-                                ajuste = None
+                                ajuste, referencia_postura = respaldo
                                 emitir('calibracion_fallida', motivo=str(error))
-                                calibrando = validando = False
+                                control_rapido = calibrando = validando = False
                         if not calibrando:
                             cv2.destroyWindow(objetivo_ventana)
                         else:
@@ -236,13 +255,13 @@ def ejecutar(args):
                         posturas_punto = []
                     if calibrando:
                         pantalla = np.zeros((alto, ancho, 3), np.uint8)
-                        objetivos = VALIDACION if validando else OBJETIVOS
+                        objetivos = CONTROL if control_rapido else VALIDACION if validando else OBJETIVOS
                         indice_punto = len(pruebas) if validando else len(puntos)
                         x, y = objetivos[indice_punto]
                         fase, restante = captura.estado(ahora)
                         color = (0, 230, 255) if fase == 'PREPARATE' else (0, 220, 0)
                         cv2.circle(pantalla, (round(x*(ancho-1)), round(y*(alto-1))), 16, color, -1)
-                        etapa = 'COMPROBACION' if validando else 'CALIBRACION'
+                        etapa = 'CONTROL RAPIDO' if control_rapido else 'COMPROBACION' if validando else 'CALIBRACION'
                         mensajes = [(30, f'{etapa} {indice_punto+1}/{len(objetivos)} | Intento {intento} | Cabeza estable | Q: salir'),
                                     (alto-35, f'{fase}: {restante:.1f}s | Muestras validas: {len(captura.muestras)}')]
                         if aviso:
@@ -296,16 +315,21 @@ def ejecutar(args):
                 if salir or cv2.getWindowProperty(ventana, cv2.WND_PROP_VISIBLE) < 1:
                     break
                 c = mirada and (tecla == ord('c') or keyboard.is_pressed('c'))
+                v = mirada and (tecla == ord('v') or keyboard.is_pressed('v'))
                 p = mirada and (tecla == ord('p') or keyboard.is_pressed('p'))
                 s = mirada and (tecla == ord('s') or keyboard.is_pressed('s'))
-                if c and not anterior_c:
+                iniciar_control = v and not anterior_v and ajuste is not None
+                if not calibrando and ((c and not anterior_c) or iniciar_control):
+                    respaldo = ajuste, referencia_postura
+                    control_rapido = bool(iniciar_control)
                     filtro.reiniciar()
-                    ajuste, puntos = None, []
-                    validando, candidatos, pruebas = False, {}, []
+                    puntos = []
+                    validando, candidatos, pruebas = control_rapido, {}, []
                     intento, aviso = 1, ''
-                    referencia_postura = None
+                    if not control_rapido:
+                        referencia_postura = None
                     posturas_punto, posturas_aceptadas = [], []
-                    emitir('calibracion_inicio')
+                    emitir('control_inicio' if control_rapido else 'calibracion_inicio')
                     calibrando = True
                     cv2.namedWindow(objetivo_ventana, cv2.WINDOW_NORMAL)
                     cv2.setWindowProperty(objetivo_ventana, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -318,6 +342,7 @@ def ejecutar(args):
                     filtro.reiniciar()
                     print(f'Suavizado: {"ON" if suavizado else "OFF"}. La calibración siempre usa muestras sin filtrar.')
                 anterior_c, anterior_p, anterior_s = c, p, s
+                anterior_v = v
     finally:
         camara.release()
         cv2.destroyAllWindows()
