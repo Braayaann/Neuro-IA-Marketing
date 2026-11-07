@@ -192,6 +192,8 @@ def ejecutar(args):
                             try:
                                 if not validando:
                                     candidatos = {'lineal': Calibracion('lineal').ajustar(puntos)}
+                                    if metodo_ajuste == 'auto' and estimador == 'iris':
+                                        candidatos['local'] = Calibracion('local').ajustar(puntos)
                                     try:
                                         candidatos['cuadratico'] = Calibracion('cuadratico').ajustar(puntos)
                                     except ValueError as error:

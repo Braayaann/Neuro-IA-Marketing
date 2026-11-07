@@ -6,6 +6,22 @@ from mirada.calibracion import Calibracion, OBJETIVOS, VALIDACION, evaluar, sele
 
 
 class CalibracionTest(unittest.TestCase):
+    def test_ajuste_local_con_distorsion_limitada_a_una_zona(self):
+        def deformar(puntos):
+            puntos = np.array(puntos)
+            distancia2 = ((puntos-[.12, .12])**2).sum(axis=1)
+            return puntos + np.exp(-distancia2[:, None]/.09)*[.1, .08]
+        metricas = {}
+        for nombre in ('lineal', 'local'):
+            ajuste = Calibracion(nombre).ajustar(OBJETIVOS, deformar(OBJETIVOS))
+            metricas[nombre] = evaluar(ajuste, VALIDACION, deformar(VALIDACION), (2560, 1440))
+        self.assertEqual(seleccionar_ajuste(metricas), 'local')
+
+    def test_descarta_mejora_media_si_empeora_el_peor_objetivo(self):
+        self.assertEqual(seleccionar_ajuste({
+            'lineal': dict(error_medio_px=60, error_maximo_px=100),
+            'local': dict(error_medio_px=40, error_maximo_px=120)}), 'lineal')
+
     def test_cuadratico_mejora_relacion_curva_en_puntos_nuevos(self):
         def pantalla(x):
             x = np.asarray(x)
