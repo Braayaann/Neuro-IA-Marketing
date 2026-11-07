@@ -30,20 +30,48 @@ def obtener_iris_por_ojo(rostros, tamano_frame):
         izquierda, derecha = sorted((extremo1, extremo2), key=lambda p: p[0])
         eje_x = derecha - izquierda
         ancho = np.linalg.norm(eje_x)
-        if ancho < 1e-6:
+        # En ojos de pocos píxeles un solo píxel domina el movimiento medido.
+        if ancho < 8:
             return None
         eje_x /= ancho
         eje_y = np.array([-eje_x[1], eje_x[0]])
         apertura = (inferior - superior) @ eje_y
         # Conserva el umbral básico de apertura del prototipo para ambos ojos.
-        if apertura < .004 * dimensiones[1]:
+        if apertura < max(.004 * dimensiones[1], .08 * ancho):
             return None
         centro_ojo = (izquierda + derecha) / 2
-        posiciones.append([(iris - izquierda) @ eje_x / ancho,
-                           .5 + (iris - centro_ojo) @ eje_y / ancho])
+        x = (iris - izquierda) @ eje_x / ancho
+        margen = .06 * ancho
+        if not 0 <= x <= 1 or (iris-superior) @ eje_y < -margen or (iris-inferior) @ eje_y > margen:
+            return None
+        posiciones.append([x, .5 + (iris - centro_ojo) @ eje_y / ancho])
     return np.asarray(posiciones)
 
 
 def obtener_iris(rostros, tamano_frame):
     posiciones = obtener_iris_por_ojo(rostros, tamano_frame)
     return None if posiciones is None else posiciones.mean(axis=0)
+
+
+class ConsistenciaBinocular:
+    """Omite saltos aislados de disparidad, conservando movimientos conjuntos."""
+
+    def __init__(self):
+        self.anterior = None
+        self.pendiente = None
+        self.tiempo = None
+
+    def aceptar(self, ojos, ahora):
+        if ojos is None:
+            self.anterior = self.pendiente = self.tiempo = None
+            return False
+        diferencia = ojos[0] - ojos[1]
+        tolerancia = np.array([.035, .022])
+        continuo = self.tiempo is not None and 0 < ahora-self.tiempo < .4
+        self.tiempo = ahora
+        if continuo and (np.abs(diferencia-self.anterior) > tolerancia).any():
+            if self.pendiente is None or (np.abs(diferencia-self.pendiente) > tolerancia).any():
+                self.pendiente = diferencia
+                return False
+        self.anterior, self.pendiente = diferencia, None
+        return True

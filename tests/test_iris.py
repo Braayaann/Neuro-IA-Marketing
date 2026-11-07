@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS
-from mirada.iris import obtener_iris
+from mirada.iris import ConsistenciaBinocular, obtener_iris
 
 
 def rostro(posiciones=((.5, .5), (.5, .5)), escala=1., desplazamiento=(0., 0.)):
@@ -22,6 +22,20 @@ def rostro(posiciones=((.5, .5), (.5, .5)), escala=1., desplazamiento=(0., 0.)):
 
 
 class SeguimientoBinocularTest(unittest.TestCase):
+    def test_descarta_iris_fuera_del_ojo(self):
+        r = rostro()
+        r.landmark[468].x += .12
+        self.assertIsNone(obtener_iris([r], (640, 480)))
+
+    def test_salto_monocular_aislado_y_movimiento_conjunto(self):
+        control = ConsistenciaBinocular()
+        ojos = np.full((2, 2), .5)
+        self.assertTrue(control.aceptar(ojos, 0))
+        self.assertFalse(control.aceptar(ojos + [[.08, 0], [0, 0]], .03))
+        self.assertTrue(control.aceptar(ojos + .09, .06))
+        self.assertFalse(control.aceptar(ojos + [[.08, 0], [0, 0]], .09))
+        self.assertTrue(control.aceptar(ojos + [[.08, 0], [0, 0]], .12))
+
     def test_centro_en_ambos_ojos(self):
         for tamano in ((640, 480), (1280, 720)):
             np.testing.assert_allclose(obtener_iris([rostro()], tamano), [.5, .5])

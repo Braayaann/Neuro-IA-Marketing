@@ -13,7 +13,7 @@ import numpy as np
 
 from mirada.calibracion import Calibracion, OBJETIVOS, VALIDACION, evaluar, seleccionar_ajuste
 from mirada.captura import CapturaPunto
-from mirada.iris import CENTROS_IRIS, obtener_iris_por_ojo
+from mirada.iris import CENTROS_IRIS, ConsistenciaBinocular, obtener_iris_por_ojo
 from mirada.postura import obtener_postura, comparar_postura
 from mirada.diagnostico import ResumenTerminal, emitir
 from mirada.suavizado import SuavizadoMirada
@@ -121,6 +121,7 @@ def ejecutar(args):
     pausa = False
     suavizado = not args.sin_suavizado
     filtro = SuavizadoMirada()
+    consistencia = ConsistenciaBinocular()
     anterior_c = anterior_p = anterior_s = False
     referencia_postura = None
     perfil = None
@@ -154,9 +155,12 @@ def ejecutar(args):
                 rostros = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).multi_face_landmarks or []
                 ojos = obtener_iris_por_ojo(rostros, (frame.shape[1], frame.shape[0]))
                 iris = None if ojos is None else ojos.mean(axis=0)
-                senal_cruda = (modelo_mirada.estimar(frame, rostros) if iris is not None else None) if modelo_mirada else iris
-                postura = obtener_postura(rostros, (frame.shape[1], frame.shape[0])) if mirada else None
                 ahora = time.perf_counter()
+                if modelo_mirada:
+                    senal_cruda = modelo_mirada.estimar(frame, rostros) if iris is not None else None
+                else:
+                    senal_cruda = iris if consistencia.aceptar(ojos, ahora) else None
+                postura = obtener_postura(rostros, (frame.shape[1], frame.shape[0])) if mirada else None
                 xy = None
                 if senal_cruda is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
