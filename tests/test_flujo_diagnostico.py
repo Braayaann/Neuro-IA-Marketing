@@ -2,6 +2,8 @@
 import io
 import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from contextlib import ExitStack, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -60,6 +62,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
         modelo_mirada.dispositivo = 'cpu'
         modelo_mirada.estimar.side_effect = lambda *args: np.array([.15, -.1])+estado['objetivo']*[.3, .15]
         with ExitStack() as pila:
+            base = Path(pila.enter_context(TemporaryDirectory()))
+            pila.enter_context(patch('main.BASE', base))
             pila.enter_context(redirect_stdout(salida))
             pila.enter_context(patch.dict('sys.modules', {'pyautogui': mouse, 'keyboard': teclado}))
             pila.enter_context(patch('mirada.l2cs.EstimadorL2CS', return_value=modelo_mirada))
@@ -77,6 +81,10 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             main.ejecutar(SimpleNamespace(modo='mirada', diagnostico=False, camara=0,
                                          sin_suavizado=False, sin_calibracion=False, clic_parpadeo=False,
                                          estimador=estimador))
+            ruta, = (base/'resultados'/'calibraciones').glob('*.json')
+            restaurado, referencia = main.cargar_perfil(ruta)
+            np.testing.assert_allclose(referencia, postura)
+            self.assertTrue(np.isfinite(restaurado.coeficientes).all())
         datos = [json.loads(linea[len('[NEURO] '):]) for linea in salida.getvalue().splitlines()
                  if linea.startswith('[NEURO] ')]
         puntos = [d for d in datos if d['evento'] == 'punto_calibracion']

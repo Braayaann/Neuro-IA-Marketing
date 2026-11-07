@@ -1,6 +1,8 @@
 """Mirada con iris binocular o L2CS-Net, y expresiones RMN. Una sola cámara."""
 import argparse
+import json
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 import time
 import unicodedata
 import webbrowser
@@ -17,6 +19,30 @@ from mirada.diagnostico import ResumenTerminal, emitir
 from mirada.suavizado import SuavizadoMirada
 
 BASE = Path(__file__).resolve().parent
+
+
+def cargar_perfil(ruta):
+    datos = json.loads(ruta.read_text(encoding='utf-8'))
+    ajuste = Calibracion(datos['metodo']).ajustar(datos['puntos'])
+    postura = datos['postura']
+    if postura is not None:
+        postura = np.asarray(postura, dtype=float)
+        if postura.shape != (6,) or not np.isfinite(postura).all():
+            raise ValueError('Postura de referencia inválida')
+    return ajuste, postura
+
+
+def guardar_perfil(ruta, ajuste, puntos, postura):
+    datos = dict(metodo=ajuste.metodo, puntos=np.asarray(puntos).tolist(),
+                 postura=None if postura is None else postura.tolist())
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=ruta.parent, delete=False) as archivo:
+        temporal = Path(archivo.name)
+    try:
+        temporal.write_text(json.dumps(datos, allow_nan=False), encoding='utf-8')
+        temporal.replace(ruta)
+    finally:
+        temporal.unlink(missing_ok=True)
 
 
 def clasificar(frame, rostros, modelo):
@@ -97,6 +123,16 @@ def ejecutar(args):
     filtro = SuavizadoMirada()
     anterior_c = anterior_p = anterior_s = False
     referencia_postura = None
+    perfil = None
+    if mirada and not args.sin_calibracion:
+        perfil = BASE/'resultados'/'calibraciones'/f'v1-{estimador}-{metodo_ajuste}-cam{args.camara}-{ancho}x{alto}.json'
+        try:
+            ajuste, referencia_postura = cargar_perfil(perfil)
+            print('Calibración recuperada. Pulsa C si necesitas reemplazarla.')
+        except FileNotFoundError:
+            print('Primer uso con esta configuración. Pulsa C para crear tu perfil.')
+        except (OSError, KeyError, TypeError, ValueError) as error:
+            print(f'Perfil ilegible ({error}). Pulsa C para calibrar.')
     posturas_punto, posturas_aceptadas = [], []
     inicio_sesion = time.perf_counter()
     resumen = ResumenTerminal(inicio_sesion)
@@ -168,6 +204,12 @@ def ejecutar(args):
                                                 for nombre, m in candidatos.items()}
                                     elegido = seleccionar_ajuste(metricas) if metodo_ajuste == 'auto' else metodo_ajuste
                                     ajuste = candidatos[elegido]
+                                    if perfil is not None:
+                                        try:
+                                            guardar_perfil(perfil, ajuste, puntos, referencia_postura)
+                                            print('Calibración guardada para la próxima sesión.')
+                                        except OSError as error:
+                                            print(f'Calibración activa solo en esta sesión: {error}')
                                     emitir('validacion_lista', metricas=metricas, elegido=elegido,
                                            muestras=np.asarray(pruebas), objetivos=VALIDACION)
                                     emitir('calibracion_lista', metodo=elegido, puntos=np.asarray(puntos), objetivos=OBJETIVOS,
