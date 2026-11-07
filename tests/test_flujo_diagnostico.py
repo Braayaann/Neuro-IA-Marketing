@@ -13,6 +13,12 @@ import main
 
 class FlujoDiagnosticoTest(unittest.TestCase):
     def test_nueve_puntos_generan_referencia_y_seguimiento(self):
+        self.comprobar_flujo('iris')
+
+    def test_l2cs_calibra_angulos_y_comprueba_sin_tratarlos_como_pixeles(self):
+        self.comprobar_flujo('l2cs')
+
+    def comprobar_flujo(self, estimador):
         estado = {'tiempo': 0., 'objetivo': np.array([.12, .12]), 'frames': 0}
         camara = MagicMock()
         camara.isOpened.return_value = True
@@ -37,7 +43,7 @@ class FlujoDiagnosticoTest(unittest.TestCase):
                 return ord('c')
             if mouse.moveTo.called:
                 return ord('q')
-            self.assertLess(estado['frames'], 1800, 'La calibración no terminó.')
+            self.assertLess(estado['frames'], 3000, 'La calibración no terminó.')
             return -1
 
         def circulo(imagen, centro, *args):
@@ -50,9 +56,13 @@ class FlujoDiagnosticoTest(unittest.TestCase):
             return np.array([iris, iris])
 
         salida = io.StringIO()
+        modelo_mirada = MagicMock()
+        modelo_mirada.dispositivo = 'cpu'
+        modelo_mirada.estimar.side_effect = lambda *args: np.array([.15, -.1])+estado['objetivo']*[.3, .15]
         with ExitStack() as pila:
             pila.enter_context(redirect_stdout(salida))
             pila.enter_context(patch.dict('sys.modules', {'pyautogui': mouse, 'keyboard': teclado}))
+            pila.enter_context(patch('mirada.l2cs.EstimadorL2CS', return_value=modelo_mirada))
             reemplazos = {'cv2.VideoCapture': MagicMock(return_value=camara),
                           'mp.solutions.face_mesh.FaceMesh': MagicMock(return_value=contexto),
                           'time.perf_counter': reloj, 'obtener_iris_por_ojo': senal,
@@ -65,7 +75,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
                            'cv2.setWindowProperty', 'cv2.destroyWindow', 'cv2.destroyAllWindows'):
                 pila.enter_context(patch('main.'+nombre))
             main.ejecutar(SimpleNamespace(modo='mirada', diagnostico=False, camara=0,
-                                         sin_suavizado=False, sin_calibracion=False, clic_parpadeo=False))
+                                         sin_suavizado=False, sin_calibracion=False, clic_parpadeo=False,
+                                         estimador=estimador))
         datos = [json.loads(linea[len('[NEURO] '):]) for linea in salida.getvalue().splitlines()
                  if linea.startswith('[NEURO] ')]
         puntos = [d for d in datos if d['evento'] == 'punto_calibracion']
@@ -79,5 +90,11 @@ class FlujoDiagnosticoTest(unittest.TestCase):
         referencia = next(d for d in datos if d['evento'] == 'calibracion_lista')['referencia_postura']
         np.testing.assert_allclose(referencia, postura)
         self.assertTrue(any(d['evento'] == 'seguimiento' for d in datos))
+        inicio = next(d for d in datos if d['evento'] == 'inicio')
+        self.assertEqual(inicio['unidades_senal'], 'radianes' if estimador == 'l2cs' else 'ancho_ojo')
+        if estimador == 'l2cs':
+            self.assertTrue(modelo_mirada.estimar.called)
+        else:
+            modelo_mirada.estimar.assert_not_called()
         mouse.moveTo.assert_called_once()
         camara.release.assert_called_once()

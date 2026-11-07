@@ -22,8 +22,12 @@ class CapturaPunto:
     minimo_muestras = 20
     tolerancia = np.array([.012, .008])
 
-    def __init__(self, inicio):
+    def __init__(self, inicio, tolerancia=None, duracion=None):
         self.inicio = inicio
+        self.tolerancia = np.asarray(self.tolerancia if tolerancia is None else tolerancia, dtype=float).copy()
+        self.duracion = self.duracion if duracion is None else float(duracion)
+        if self.tolerancia.shape != (2,) or not np.isfinite(self.tolerancia).all() or (self.tolerancia <= 0).any() or not np.isfinite(self.duracion) or self.duracion < 2.4:
+            raise ValueError('Tolerancias positivas de dos ejes y duración mínima de 2,4 s requeridas.')
         self.muestras = []
         self.tiempos = []
         self.total = 0

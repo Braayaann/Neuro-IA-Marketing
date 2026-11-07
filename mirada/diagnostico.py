@@ -21,11 +21,14 @@ class ResumenTerminal:
         self.ultimo = inicio
         self.frames = 0
         self.muestras = []
+        self.senales = []
 
-    def actualizar(self, ahora, iris, **datos):
+    def actualizar(self, ahora, iris, senal=None, **datos):
         self.frames += 1
         if iris is not None:
             self.muestras.append(np.asarray(iris).copy())
+        if senal is not None:
+            self.senales.append(np.asarray(senal).copy())
         intervalo = ahora-self.ultimo
         if intervalo < 2.:
             return
@@ -33,7 +36,9 @@ class ResumenTerminal:
                fps=round(self.frames/intervalo, 1),
                validas_pct=round(100*len(self.muestras)/self.frames, 1),
                dispersion_iris=np.std(self.muestras, axis=0) if self.muestras else None,
-               iris=iris, **datos)
+               senal=senal, dispersion_senal=np.std(self.senales, axis=0) if self.senales else None,
+               senal_valida_pct=round(100*len(self.senales)/self.frames, 1), iris=iris, **datos)
         self.ultimo = ahora
         self.frames = 0
         self.muestras = []
+        self.senales = []

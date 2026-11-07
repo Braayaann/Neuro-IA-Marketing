@@ -33,6 +33,14 @@ class CapturaPuntoTest(unittest.TestCase):
         resultado = completar(CapturaPunto(0.), [[.4, .5]]*36)
         np.testing.assert_allclose(resultado.posicion, [.4, .5])
 
+    def test_configuracion_angular_no_utiliza_umbrales_de_iris(self):
+        captura = CapturaPunto(0., tolerancia=np.radians([3., 3.]), duracion=4.)
+        muestras = [[.2+(-1)**i*.02, -.1] for i in range(40)]
+        for muestra, tiempo in zip(muestras, np.linspace(.01, 3.99, 40)):
+            captura.actualizar(muestra, captura.preparacion+tiempo)
+        resultado = captura.actualizar(None, captura.preparacion+4.01)
+        np.testing.assert_allclose(resultado.posicion, [.2, -.1])
+
     def test_pocas_muestras_no_se_aceptan(self):
         resultado = completar(CapturaPunto(0.), [[.4, .5]]*10)
         self.assertIsNone(resultado.posicion)

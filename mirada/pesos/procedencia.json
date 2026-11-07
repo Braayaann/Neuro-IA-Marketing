@@ -1,0 +1,11 @@
+{
+  "modelo": "L2CS-Net ResNet50 Gaze360",
+  "repositorio_autores": "https://github.com/Ahmednull/L2CS-Net",
+  "enlace_original": "https://drive.google.com/drive/folders/17p6ORr-JQJcw-eYtG2WGNiuS_qVKwdWd",
+  "nota": "El enlace original devolvio 404. Se usa la copia publica indicada; no se verifico identidad binaria contra el original inaccesible.",
+  "url_copia": "https://huggingface.co/tianfxc/l2cs/resolve/424a499580d1217b57f8f1f3c2a5582c30cd6610/L2CSNet_gaze360.pkl",
+  "sha256": "8a7f3480d868dd48261e1d59f915b0ef0bb33ea12ea00938fb2168f212080665",
+  "bytes": 95849977,
+  "carga": "torch.load(weights_only=True), load_state_dict(strict=True)",
+  "codigo_autores_commit": "a4d8f7fa5436a2b2b9f088471623b552a85811bd"
+}

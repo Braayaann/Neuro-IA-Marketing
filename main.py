@@ -1,4 +1,4 @@
-"""MediaPipe para el iris y RMN para expresiones. Una sola cámara."""
+"""Mirada con iris binocular o L2CS-Net, y expresiones RMN. Una sola cámara."""
 import argparse
 from pathlib import Path
 import time
@@ -38,6 +38,17 @@ def clasificar(frame, rostros, modelo):
 
 
 def ejecutar(args):
+    estimador = getattr(args, 'estimador', 'iris')
+    mirada = args.modo != 'emociones'
+    modelo_mirada = None
+    opciones_captura = {}
+    if mirada and estimador == 'l2cs':
+        if args.sin_calibracion:
+            raise ValueError('L2CS produce ángulos, no píxeles. Omite --sin-calibracion y pulsa C.')
+        from mirada.l2cs import EstimadorL2CS
+        modelo_mirada = EstimadorL2CS(dispositivo=getattr(args, 'dispositivo_mirada', 'cpu'))
+        opciones_captura = {'tolerancia': np.radians([3., 3.]), 'duracion': 4.}
+        print(f'Mirada L2CS/Gaze360: {modelo_mirada.dispositivo}. Se requiere calibración de pantalla.')
     modelo = None
     if args.modo != 'mirada':
         from emociones.rmn_detector import ClasificadorRMN
@@ -49,9 +60,11 @@ def ejecutar(args):
         if modelo is not None:
             resultado = modelo.predecir(np.zeros((100, 100, 3), np.uint8))
             assert resultado.shape == (7,) and np.isfinite(resultado).all()
+        if modelo_mirada is not None:
+            resultado = modelo_mirada.predecir(np.zeros((180, 180, 3), np.uint8))
+            assert resultado.shape == (2,) and np.isfinite(resultado).all()
         print('OK: modelos cargados e inferencia completada. No mide precisión real.')
         return
-    mirada = args.modo != 'emociones'
     if mirada:
         import pyautogui
         import keyboard
@@ -87,8 +100,11 @@ def ejecutar(args):
     posturas_punto, posturas_aceptadas = [], []
     inicio_sesion = time.perf_counter()
     resumen = ResumenTerminal(inicio_sesion)
-    emitir('inicio', version=1, modo=args.modo, camara=args.camara,
+    emitir('inicio', version=2, modo=args.modo, camara=args.camara,
            ajuste_solicitado=metodo_ajuste,
+           estimador=estimador if mirada else None, unidades_senal='radianes' if modelo_mirada else 'ancho_ojo',
+           captura_segundos=opciones_captura.get('duracion', CapturaPunto.duracion),
+           tolerancia_captura=opciones_captura.get('tolerancia', CapturaPunto.tolerancia),
            pantalla=[ancho, alto] if mirada else None, mediapipe=mp.__version__, opencv=cv2.__version__,
            suavizado=suavizado, filtro={'corte_minimo': filtro.corte_minimo, 'beta': filtro.beta},
            umbrales_postura={'grados': 8, 'desplazamiento_anchos_cara': .15, 'cambio_ancho': .15})
@@ -102,16 +118,17 @@ def ejecutar(args):
                 rostros = detector.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).multi_face_landmarks or []
                 ojos = obtener_iris_por_ojo(rostros, (frame.shape[1], frame.shape[0]))
                 iris = None if ojos is None else ojos.mean(axis=0)
+                senal_cruda = (modelo_mirada.estimar(frame, rostros) if iris is not None else None) if modelo_mirada else iris
                 postura = obtener_postura(rostros, (frame.shape[1], frame.shape[0])) if mirada else None
                 ahora = time.perf_counter()
                 xy = None
-                if iris is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
+                if senal_cruda is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
                     objetivos = VALIDACION if validando else OBJETIVOS
                     posiciones = pruebas if validando else puntos
                     antes = len(captura.muestras)
-                    resultado = captura.actualizar(iris, ahora)
+                    resultado = captura.actualizar(senal_cruda, ahora)
                     if len(captura.muestras) > antes and postura is not None:
                         posturas_punto.append(postura)
                     if resultado is not None:
@@ -119,7 +136,7 @@ def ejecutar(args):
                                objetivo=objetivos[len(posiciones)], aceptado=resultado.posicion is not None,
                                motivo=resultado.motivo, muestras=len(captura.muestras), total=captura.total,
                                dispersion=np.std(captura.muestras, axis=0) if captura.muestras else None,
-                               iris=resultado.posicion,
+                               senal=resultado.posicion, estimador=estimador,
                                postura_mediana=np.median(posturas_punto, axis=0) if posturas_punto else None)
                         if resultado.posicion is not None:
                             posiciones.append(resultado.posicion)
@@ -167,7 +184,7 @@ def ejecutar(args):
                         if not calibrando:
                             cv2.destroyWindow(objetivo_ventana)
                         else:
-                            captura = CapturaPunto(ahora)
+                            captura = CapturaPunto(ahora, **opciones_captura)
                         posturas_punto = []
                     if calibrando:
                         pantalla = np.zeros((alto, ancho, 3), np.uint8)
@@ -188,8 +205,8 @@ def ejecutar(args):
                             cv2.putText(pantalla, texto, (20, altura_texto),
                                         cv2.FONT_HERSHEY_SIMPLEX, min(.55, ancho/1800), (255, 255, 255), 1)
                         cv2.imshow(objetivo_ventana, pantalla)
-                elif mirada and not pausa and iris is not None and (ajuste or args.sin_calibracion):
-                    senal = filtro.actualizar(iris, ahora) if suavizado else iris
+                elif mirada and not pausa and senal_cruda is not None and (ajuste or args.sin_calibracion):
+                    senal = filtro.actualizar(senal_cruda, ahora) if suavizado else senal_cruda
                     xy = ajuste.predecir(senal) if ajuste else senal
                     if np.isfinite(xy).all() and ((xy >= 0) & (xy <= 1)).all():
                         pyautogui.moveTo(round(xy[0]*(ancho-1)), round(xy[1]*(alto-1)))
@@ -215,7 +232,10 @@ def ejecutar(args):
                     cv2.putText(vista, texto_filtro, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                     cv2.putText(vista, estado_postura, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, .5,
                                 (0, 180, 255) if estado_postura == 'POSTURA CAMBIO' else (255, 255, 255), 1)
-                resumen.actualizar(ahora, iris, estado=estado, ojos=ojos, suavizado=suavizado,
+                    cv2.putText(vista, f'Mirada: {estimador} | Ajuste: {ajuste.metodo if ajuste else "pendiente"}',
+                                (10, 75), cv2.FONT_HERSHEY_SIMPLEX, .45, (255, 255, 255), 1)
+                resumen.actualizar(ahora, iris, senal=senal_cruda, estado=estado, ojos=ojos, suavizado=suavizado,
+                                   estimador=estimador, metodo_ajuste=ajuste.metodo if ajuste else None,
                                    resolucion_camara=[frame.shape[1], frame.shape[0]],
                                    postura=postura, estado_postura=estado_postura, delta_postura=delta_postura,
                                    estimacion_px=xy*np.array([ancho-1, alto-1]) if xy is not None else None,
@@ -241,7 +261,7 @@ def ejecutar(args):
                     calibrando = True
                     cv2.namedWindow(objetivo_ventana, cv2.WINDOW_NORMAL)
                     cv2.setWindowProperty(objetivo_ventana, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                    captura = CapturaPunto(time.perf_counter())
+                    captura = CapturaPunto(time.perf_counter(), **opciones_captura)
                 if p and not anterior_p and not calibrando:
                     pausa = not pausa
                     filtro.reiniciar()
@@ -264,6 +284,10 @@ def main():
     parser.add_argument('--sin-suavizado', action='store_true', help='Inicia sin filtro temporal; S permite alternarlo durante la sesión.')
     parser.add_argument('--ajuste', choices=('auto', 'lineal', 'cuadratico'), default='auto',
                         help='Auto compara ambos ajustes en cinco puntos nuevos; se calibra con nueve.')
+    parser.add_argument('--estimador', choices=('iris', 'l2cs'), default='iris',
+                        help='Iris binocular o modelo preentrenado L2CS/Gaze360. Ambos se calibran con C.')
+    parser.add_argument('--dispositivo-mirada', choices=('cpu', 'cuda'), default='cpu',
+                        help='Dispositivo para L2CS. La instalación CPU no incluye CUDA.')
     parser.add_argument('--diagnostico', action='store_true', help='Prueba modelos sin cámara ni movimiento del cursor.')
     try:
         ejecutar(parser.parse_args())

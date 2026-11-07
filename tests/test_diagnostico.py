@@ -9,6 +9,19 @@ from mirada.diagnostico import ResumenTerminal, emitir
 
 
 class DiagnosticoTest(unittest.TestCase):
+    def test_senales_angulares_se_registran_separadas_del_iris(self):
+        salida = io.StringIO()
+        resumen = ResumenTerminal(0.)
+        with redirect_stdout(salida):
+            resumen.actualizar(1., [.4, .5], senal=[-.2, .1])
+            resumen.actualizar(2., [.4, .5], senal=[-.1, .2])
+        datos = json.loads(salida.getvalue().removeprefix('[NEURO] '))
+        self.assertEqual(datos['iris'], [.4, .5])
+        self.assertEqual(datos['senal'], [-.1, .2])
+        self.assertEqual(datos['dispersion_iris'], [0., 0.])
+        self.assertEqual(datos['dispersion_senal'], [.05, .05])
+        self.assertEqual(datos['senal_valida_pct'], 100.)
+
     def test_limita_salida_y_reinicia_estadisticas_por_intervalo(self):
         salida = io.StringIO()
         resumen = ResumenTerminal(0.)
