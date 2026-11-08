@@ -150,7 +150,6 @@ def ejecutar(args):
         except (OSError, KeyError, TypeError, ValueError) as error:
             print(f'Perfil ilegible ({error}). Pulsa C para calibrar.')
     posturas_punto, posturas_aceptadas = [], []
-    postura_captura = None
     inicio_sesion = time.perf_counter()
     resumen = ResumenTerminal(inicio_sesion)
     emitir('inicio', version=2, modo=args.modo, camara=args.camara,
@@ -184,14 +183,7 @@ def ejecutar(args):
                     objetivos = CONTROL if control_rapido else VALIDACION if validando else OBJETIVOS
                     posiciones = pruebas if validando else puntos
                     antes = len(captura.muestras)
-                    muestra = senal_cruda
-                    if estimador == 'iris' and postura is not None and senal_cruda is not None:
-                        if postura_captura is None and captura.estado(ahora)[0] == 'CAPTURANDO':
-                            postura_captura = postura.copy()
-                        if comparar_postura(postura, postura_captura)[0] == 'POSTURA CAMBIO':
-                            muestra = None
-                            aviso = 'Vuelve a la postura inicial de esta prueba.'
-                    resultado = captura.actualizar(muestra, ahora)
+                    resultado = captura.actualizar(senal_cruda, ahora, postura if estimador == 'iris' else None)
                     if len(captura.muestras) > antes and postura is not None:
                         posturas_punto.append(postura)
                     if resultado is not None:
@@ -331,7 +323,6 @@ def ejecutar(args):
                     if not calibrando:
                         respaldo = ajuste, referencia_postura
                     control_rapido = bool(iniciar_control and not c)
-                    postura_captura = None
                     filtro.reiniciar()
                     puntos = []
                     validando, candidatos, pruebas = control_rapido, {}, []

@@ -26,7 +26,10 @@ class FlujoDiagnosticoTest(unittest.TestCase):
     def test_giro_transitorio_repite_solo_el_punto_afectado(self):
         self.comprobar_flujo('iris', giro=True)
 
-    def comprobar_flujo(self, estimador, control=False, giro=False):
+    def test_fila_inferior_con_postura_estable_completa_al_primer_intento(self):
+        self.comprobar_flujo('iris', control=True, fila_inferior=True)
+
+    def comprobar_flujo(self, estimador, control=False, giro=False, fila_inferior=False):
         estado = {'tiempo': 0., 'objetivo': np.array([.12, .12]), 'frames': 0}
         camara = MagicMock()
         camara.isOpened.return_value = True
@@ -43,6 +46,8 @@ class FlujoDiagnosticoTest(unittest.TestCase):
 
         def observar_postura(*args):
             actual = postura.copy()
+            if fila_inferior and estado['objetivo'][1] > .7:
+                actual[0] += 11
             if giro and 55 < estado['frames'] < 105:
                 actual[1] += 15
             return actual

@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 
 import numpy as np
+from .postura import comparar_postura
 
 
 @dataclass
@@ -30,6 +31,7 @@ class CapturaPunto:
             raise ValueError('Tolerancias positivas de dos ejes y duración mínima de 2,4 s requeridas.')
         self.muestras = []
         self.tiempos = []
+        self.posturas_por_tercio = [[], [], []]
         self.total = 0
         self.resultado = None
 
@@ -39,7 +41,7 @@ class CapturaPunto:
             return 'PREPARATE', max(0., self.preparacion-transcurrido)
         return 'CAPTURANDO', max(0., self.preparacion+self.duracion-transcurrido)
 
-    def actualizar(self, iris, ahora):
+    def actualizar(self, iris, ahora, postura=None):
         if self.resultado is not None:
             return self.resultado
         t = ahora - self.inicio - self.preparacion
@@ -54,6 +56,9 @@ class CapturaPunto:
             if muestra.shape == (2,) and np.isfinite(muestra).all():
                 self.muestras.append(muestra.copy())
                 self.tiempos.append(t)
+                if postura is not None:
+                    tercio = min(2, int(3*t/self.duracion))
+                    self.posturas_por_tercio[tercio].append(postura.copy())
         return None
 
     def _evaluar(self):
@@ -77,4 +82,16 @@ class CapturaPunto:
         if not len(primera) or not len(ultima) or (
                 np.abs(np.median(ultima, axis=0)-np.median(primera, axis=0)) > self.tolerancia).any():
             return ResultadoPunto(None, 'La mirada cambió durante la captura: repite la fijación.')
+        referencias = []
+        for tramo in self.posturas_por_tercio:
+            if len(tramo) < 3:
+                continue
+            valores = np.asarray(tramo)
+            postura = np.median(valores, axis=0)
+            # Mantener continuidad si los ángulos cruzan de +180 a -180.
+            origen = valores[0, :3]
+            postura[:3] = origen + np.median((valores[:, :3]-origen+180) % 360-180, axis=0)
+            if any(comparar_postura(postura, previa)[0] == 'POSTURA CAMBIO' for previa in referencias):
+                return ResultadoPunto(None, 'La postura varió durante este punto. Mira el mismo punto otra vez.')
+            referencias.append(postura)
         return ResultadoPunto(np.median(seleccion, axis=0), 'Captura estable aceptada.')
