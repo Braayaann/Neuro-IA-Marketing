@@ -16,6 +16,9 @@ También puedes abrir `ejecutar.bat`. Se abre el HTML del cliente y una vista de
 
 - `C`: calibrar mirando nueve puntos y comprobar cinco puntos nuevos. Amarillo: preparación (1,2 s); verde: captura (2,4 s con iris; 4 s con L2CS). Mantén la mirada en el punto durante ambas etapas. Después vuelve a la página del navegador.
 - `V` comprueba un perfil activo en cuatro puntos. Estima un desplazamiento común con los tres primeros y solo lo guarda si es consistente, moderado y reduce el error en el cuarto. Consulta `[NEURO] control_rapido` para ver las diferencias por punto.
+- `M` abre el comparador a pantalla completa sobre el perfil cargado. Puedes usar el mouse físico para pulsar los botones. Mira las cruces y observa el círculo amarillo. Selecciona Lineal, Cuadrático o Local. Cada opción conserva sus propios ajustes mientras el panel está abierto.
+- Las flechas desplazan la estimación en pasos de 2, 10 o 30 píxeles. Usa Ancho y Alto para ampliar o reducir el recorrido alrededor del centro en pasos de 2 %. Si el centro coincide y la estimación se queda corta al mirar hacia ambos bordes, aumenta el recorrido de ese eje.
+- **Medir 5 puntos** compara todas las opciones y el perfil guardado con las mismas cinco fijaciones. El panel muestra el error medio en píxeles. Si editas los ajustes, los valores se recalculan con esas muestras. Repite la medición para confirmarlo con nuevas fijaciones. **Guardar selección** activa el método y los valores visibles para las siguientes sesiones. **Cancelar** descarta la edición.
 - `P`: pausar o reanudar el movimiento del cursor.
 - `S`: activar o desactivar el suavizado durante la misma sesión, incluso desde el navegador. La cámara muestra su estado.
 - `Q`: salir, incluso cuando el navegador tiene el foco.

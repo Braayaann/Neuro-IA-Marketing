@@ -13,6 +13,7 @@ import numpy as np
 
 from mirada.calibracion import Calibracion, CONTROL, OBJETIVOS, VALIDACION, corregir_deriva, evaluar, seleccionar_ajuste
 from mirada.captura import CapturaPunto
+from mirada.comparador import PanelComparacion
 from mirada.iris import CENTROS_IRIS, ConsistenciaBinocular, obtener_iris_por_ojo
 from mirada.postura import obtener_postura, comparar_postura
 from mirada.diagnostico import ResumenTerminal, emitir
@@ -28,6 +29,10 @@ def cargar_perfil(ruta):
     if delta.shape != (2,) or not np.isfinite(delta).all():
         raise ValueError('Desplazamiento de perfil inválido.')
     ajuste.desplazamiento = delta
+    ganancia = np.asarray(datos.get('ganancia', [1., 1.]), dtype=float)
+    if ganancia.shape != (2,) or not np.isfinite(ganancia).all() or (ganancia < .5).any() or (ganancia > 1.5).any():
+        raise ValueError('Ganancia de perfil inválida.')
+    ajuste.ganancia = ganancia
     postura = datos['postura']
     if postura is not None:
         postura = np.asarray(postura, dtype=float)
@@ -38,7 +43,8 @@ def cargar_perfil(ruta):
 
 def guardar_perfil(ruta, ajuste, puntos, postura):
     datos = dict(metodo=ajuste.metodo, puntos=np.asarray(puntos).tolist(),
-                 postura=None if postura is None else postura.tolist(), desplazamiento=ajuste.desplazamiento.tolist())
+                 postura=None if postura is None else postura.tolist(), desplazamiento=ajuste.desplazamiento.tolist(),
+                 ganancia=ajuste.ganancia.tolist())
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=ruta.parent, delete=False) as archivo:
         temporal = Path(archivo.name)
@@ -132,7 +138,9 @@ def ejecutar(args):
     ultimo_click = 0.
     ventana = 'Neuro IA - Camara'
     objetivo_ventana = 'Calibracion - mira el punto'
-    print('Q: salir | C: calibrar | V: comprobar y corregir perfil | P: pausa | S: suavizado.')
+    print('Q: salir | C: calibrar | V: comprobar deriva | M: comparar ajustes | P: pausa | S: suavizado.')
+    panel = None
+    anterior_m = False
     pausa = False
     suavizado = not args.sin_suavizado
     filtro = SuavizadoMirada()
@@ -177,7 +185,7 @@ def ejecutar(args):
                     senal_cruda = iris if consistencia.aceptar(ojos, ahora) else None
                 postura = obtener_postura(rostros, (frame.shape[1], frame.shape[0])) if mirada else None
                 xy = None
-                if senal_cruda is None or calibrando or pausa or not suavizado or not (ajuste or args.sin_calibracion):
+                if senal_cruda is None or calibrando or (pausa and panel is None) or not suavizado or not (ajuste or args.sin_calibracion):
                     filtro.reiniciar()
                 if calibrando:
                     objetivos = CONTROL if control_rapido else VALIDACION if validando else OBJETIVOS
@@ -272,12 +280,15 @@ def ejecutar(args):
                             cv2.putText(pantalla, texto, (20, altura_texto),
                                         cv2.FONT_HERSHEY_SIMPLEX, min(.55, ancho/1800), (255, 255, 255), 1)
                         cv2.imshow(objetivo_ventana, pantalla)
+                elif panel is not None:
+                    senal = filtro.actualizar(senal_cruda, ahora) if suavizado else senal_cruda
+                    panel.actualizar(senal_cruda, senal, postura if estimador == 'iris' else None, ahora)
                 elif mirada and not pausa and senal_cruda is not None and (ajuste or args.sin_calibracion):
                     senal = filtro.actualizar(senal_cruda, ahora) if suavizado else senal_cruda
                     xy = ajuste.predecir(senal) if ajuste else senal
                     if np.isfinite(xy).all() and ((xy >= 0) & (xy <= 1)).all():
                         pyautogui.moveTo(round(xy[0]*(ancho-1)), round(xy[1]*(alto-1)))
-                if mirada and args.clic_parpadeo and not pausa and not calibrando and len(rostros) == 1:
+                if mirada and args.clic_parpadeo and panel is None and not pausa and not calibrando and len(rostros) == 1:
                     p = rostros[0].landmark
                     if p[145].y-p[159].y < .004 and ahora-ultimo_click > 1:
                         pyautogui.click()
@@ -292,14 +303,14 @@ def ejecutar(args):
                         centro = rostros[0].landmark[indice]
                         cv2.circle(vista, (round(centro.x*frame.shape[1]), round(centro.y*frame.shape[0])),
                                    3, (0, 255, 255), -1)
-                estado = 'VALIDANDO' if validando else 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
+                estado = 'COMPARANDO' if panel else 'VALIDANDO' if validando else 'CALIBRANDO' if calibrando else 'PAUSA' if pausa else 'LISTO' if ajuste else 'C: calibrar'
                 estado_postura, delta_postura = comparar_postura(postura, referencia_postura)
                 if mirada:
                     texto_filtro = 'CALIBRACION SIN FILTRO' if calibrando else f'S: suavizado {"ON" if suavizado else "OFF"}'
                     cv2.putText(vista, texto_filtro, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                     cv2.putText(vista, estado_postura, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, .5,
                                 (0, 180, 255) if estado_postura == 'POSTURA CAMBIO' else (255, 255, 255), 1)
-                    cv2.putText(vista, f'Mirada: {estimador} | Ajuste: {ajuste.metodo if ajuste else "pendiente"}',
+                    cv2.putText(vista, f'Mirada: {estimador} | Ajuste: {ajuste.metodo if ajuste else "pendiente"} | M: comparar',
                                 (10, 75), cv2.FONT_HERSHEY_SIMPLEX, .45, (255, 255, 255), 1)
                 resumen.actualizar(ahora, iris, senal=senal_cruda, estado=estado, ojos=ojos, suavizado=suavizado,
                                    estimador=estimador, metodo_ajuste=ajuste.metodo if ajuste else None,
@@ -311,9 +322,38 @@ def ejecutar(args):
                 cv2.putText(vista, f'{estado} | Q: salir', (10, vista.shape[0]-15), cv2.FONT_HERSHEY_SIMPLEX, .6, (255, 255, 255), 2)
                 cv2.imshow(ventana, vista)
                 tecla = cv2.waitKey(1) & 0xff
-                salir = tecla in (27, ord('q')) or (mirada and keyboard.is_pressed('q'))
+                salir = tecla == ord('q') or (tecla == 27 and panel is None) or (mirada and keyboard.is_pressed('q'))
                 if salir or cv2.getWindowProperty(ventana, cv2.WND_PROP_VISIBLE) < 1:
                     break
+                m = mirada and (tecla == ord('m') or keyboard.is_pressed('m'))
+                abrir_panel = m and not anterior_m and not calibrando
+                anterior_m = m
+                if panel is not None:
+                    if tecla == 27:
+                        panel.accion = 'cancelar'
+                    if panel.accion == 'guardar':
+                        elegido = panel.alternativas.modelo
+                        try:
+                            guardar_perfil(perfil, elegido, elegido.muestras, referencia_postura)
+                        except OSError as error:
+                            panel.accion = None
+                            panel.estado.set(f'Error al guardar: {error}')
+                            continue
+                        ajuste = elegido
+                        emitir('comparacion_guardada', metodo=elegido.metodo, ganancia=elegido.ganancia,
+                               desplazamiento=elegido.desplazamiento)
+                    if panel.accion:
+                        panel.cerrar()
+                        panel = None
+                        filtro.reiniciar()
+                    continue
+                if abrir_panel:
+                    if ajuste is not None and perfil is not None:
+                        panel = PanelComparacion(ajuste, (ancho, alto), opciones_captura)
+                        filtro.reiniciar()
+                    else:
+                        print('M requiere un perfil activo. Usa C en el modo calibrado.')
+                    continue
                 c = mirada and (tecla == ord('c') or keyboard.is_pressed('c'))
                 v = mirada and (tecla == ord('v') or keyboard.is_pressed('v'))
                 p = mirada and (tecla == ord('p') or keyboard.is_pressed('p'))
@@ -345,6 +385,8 @@ def ejecutar(args):
                 anterior_c, anterior_p, anterior_s = c, p, s
                 anterior_v = v
     finally:
+        if panel is not None:
+            panel.cerrar()
         camara.release()
         cv2.destroyAllWindows()
 

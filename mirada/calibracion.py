@@ -34,6 +34,7 @@ class Calibracion:
         self.metodo = metodo
         self.regularizacion = regularizacion
         self.desplazamiento = np.zeros(2)
+        self.ganancia = np.ones(2)
 
     def _matriz(self, iris):
         x, y = ((np.atleast_2d(iris)-self.media)/self.escala).T
@@ -71,13 +72,13 @@ class Calibracion:
         if x.shape != (2,) or not np.isfinite(x).all():
             raise ValueError('Se necesita una señal de mirada válida de dos valores.')
         matriz = self._matriz(x)
-        prediccion = (matriz @ self.coeficientes)[0] + self.desplazamiento
+        prediccion = (matriz @ self.coeficientes)[0]
         if self.metodo == 'local':
             distancia2 = ((self.centros-matriz[0, 1:])**2).sum(axis=1)
             pesos = np.exp(-distancia2 / (2 * .75**2))
             # El término constante atenúa la corrección lejos de la cuadrícula.
             prediccion += pesos @ self.residuos / (.15 + pesos.sum())
-        return prediccion
+        return .5 + (prediccion-.5)*self.ganancia + self.desplazamiento
 
 
 def evaluar(modelo, muestras, objetivos, pantalla):
