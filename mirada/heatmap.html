@@ -100,7 +100,7 @@
 
         // Configuración de la "brocha" del mapa de calor
         let ultimaMuestra = 0;
-        const radius = 60; // Tamaño del punto de calor
+        const radius = 2; // Marca de 4 píxeles de diámetro
 
         // Función principal que dibuja el calor
         function drawHeatPoint(x, y) {
@@ -109,9 +109,9 @@
 
             // Colores tipo Heatmap (baja opacidad para permitir acumulación)
             // Centro rojo intenso, luego naranja, luego amarillo, y finalmente transparente
-            gradient.addColorStop(0, "rgba(255, 0, 0, 0.05)");   // Centro (Caliente)
-            gradient.addColorStop(0.4, "rgba(255, 120, 0, 0.03)"); // Medio (Cálido)
-            gradient.addColorStop(0.8, "rgba(255, 255, 0, 0.01)"); // Borde (Tibio)
+            gradient.addColorStop(0, "rgba(255, 0, 0, 0.65)");   // Centro (Caliente)
+            gradient.addColorStop(0.4, "rgba(255, 120, 0, 0.35)"); // Medio (Cálido)
+            gradient.addColorStop(0.8, "rgba(255, 255, 0, 0.08)"); // Borde (Tibio)
             gradient.addColorStop(1, "rgba(0, 0, 0, 0)");        // Fuera (Frío)
 
             // Modo de composición para que los colores se sumen y brillen al superponerse
