@@ -12,3 +12,6 @@ resultados/
 *.pkl
 *.task
 *.zip
+/.tools
+/frontend
+/.local
