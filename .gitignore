@@ -12,6 +12,13 @@ resultados/
 *.pkl
 *.task
 *.zip
-/.tools
-/frontend
-/.local
+!.env.example
+.local/
+.tools/
+node_modules/
+frontend/dist/
+coverage/
+*.log
+backend/tests/.env
+*.sqlite
+*.sqlite3

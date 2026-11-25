@@ -1,5 +1,19 @@
 # Neuro IA Marketing
 
+## Primera versión web
+
+Portal React, API Flask y PostgreSQL. Incluye cuentas, anuncios, sesiones, calibración de mirada con ambos iris, clasificación de expresiones RMN y resultados con mapa de calor y exportación CSV.
+
+Desde PowerShell en la raíz del repositorio:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\iniciar_web.ps1
+```
+
+Abre [http://localhost:5000](http://localhost:5000). Las credenciales iniciales se guardan en `.local/acceso-inicial.txt`. Consulta [preparación, uso y despliegue](docs/APLICACION_WEB.md) para instalar la aplicación en otro equipo.
+
+## Prototipo de escritorio
+
 Prototipo local para Windows con seguimiento de mirada por iris binocular de MediaPipe o L2CS-Net/Gaze360 y expresiones faciales con RMN. Todos los módulos comparten una cámara.
 
 El seguimiento normaliza los centros de ambos iris (468 y 473) por el ancho de cada ojo y mide la altura respecto al punto medio de sus comisuras. Comprueba la apertura, el ancho en píxeles y la posición del iris respecto a comisuras y párpados. En modo iris también descarta cambios aislados en la diferencia entre ambos ojos antes de utilizar el promedio binocular. La cámara muestra los centros detectados en amarillo. Solo se admite una persona para el seguimiento.
