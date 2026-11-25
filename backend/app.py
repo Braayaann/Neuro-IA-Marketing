@@ -22,6 +22,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .models import Ad, Calibration, Observation, Study, StudyAd, User, db, utcnow
+from .metrics import QUADRANTS, quadrant_times
 from .vision import Vision
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -482,17 +483,22 @@ def create_app(config=None):
     def result(s):
         observations = list(db.session.scalars(select(Observation).where(Observation.study_id == s.id).order_by(Observation.seq)))
         total = sum(o.estimated_seconds for o in observations)
+        zones = quadrant_times(observations, s.slots)
         ads = []
         for a in s.slots:
             rows = [o for o in observations if o.study_ad_id == a.id]
             seconds = sum(o.estimated_seconds for o in rows)
             ads.append(dict(**a.public(), seconds=round(seconds, 2), samples=len(rows),
+                            quadrant_seconds=round(sum(zones[a.id]), 2),
+                            quadrants=[dict(key=key, label=label, seconds=round(duration, 2))
+                                       for (key, label), duration in zip(QUADRANTS, zones[a.id])],
                             share=round(seconds/total*100, 1) if total else 0,
                             emotions=dict(Counter(o.emotion for o in rows if o.emotion))))
         valid = sum(o.valid for o in observations)
         return dict(study=s.public(), ads=ads, total_samples=len(observations), valid_samples=valid,
                     valid_ratio=round(valid/len(observations)*100, 1) if observations else 0,
                     estimated_seconds=round(total, 2),
+                    quadrant_seconds=round(sum(sum(values) for values in zones.values()), 2),
                     emotions=dict(Counter(o.emotion for o in observations if o.emotion)),
                     rejected=dict(Counter(o.reason for o in observations if not o.valid)),
                     # Límite de puntos para visualización; totales calculados sobre todos los registros.
