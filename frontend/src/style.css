@@ -1222,6 +1222,37 @@ td .textbtn {
   position: absolute;
   inset: 0;
 }
+.quadrant-overlay {
+  z-index: 2;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  pointer-events: none;
+}
+.quadrant-overlay::before, .quadrant-overlay::after {
+  content: "";
+  position: absolute;
+  background: #20392f;
+  box-shadow: 0 0 0 1px #fff;
+}
+.quadrant-overlay::before { left: 50%; top: 0; width: 1px; height: 100%; }
+.quadrant-overlay::after { top: 50%; left: 0; height: 1px; width: 100%; }
+.quadrant-overlay span {
+  align-self: start;
+  justify-self: start;
+  margin: 5px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #ffffffe6;
+  font-size: clamp(9px, 1vw, 12px);
+}
+.overview-table-scroll { overflow-x: auto; }
+.overview-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.overview-table th, .overview-table td { padding: 14px 12px; text-align: left; border-bottom: 1px solid #e5e9e2; }
+.overview-table thead { background: #eff6e9; }
+.gaze-points > svg { z-index: 3; }
+.gaze-overview-title { z-index: 4; }
 .gaze-overview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

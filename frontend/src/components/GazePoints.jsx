@@ -1,7 +1,12 @@
 import React from "react";
 import { AdVisual } from "./ui";
 
-export function GazePoints({ ad, study, compact = false }) {
+export function GazePoints({
+  ad,
+  study,
+  compact = false,
+  showQuadrants = false,
+}) {
   const columns = study.slots.length === 1 ? 1 : 2;
   const rows = study.slots.length > 2 ? 2 : 1;
   const points = (ad.points || [])
@@ -19,6 +24,17 @@ export function GazePoints({ ad, study, compact = false }) {
     <>
       <div className="gaze-points" style={{ aspectRatio: aspect }}>
         <AdVisual ad={ad} />
+        {showQuadrants && (
+          <div
+            className="quadrant-overlay"
+            aria-label="División en cuatro cuadrantes"
+          >
+            <span>Superior izquierdo</span>
+            <span>Superior derecho</span>
+            <span>Inferior izquierdo</span>
+            <span>Inferior derecho</span>
+          </div>
+        )}
         <svg
           width="100%"
           height="100%"

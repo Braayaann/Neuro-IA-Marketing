@@ -60,6 +60,10 @@ it("muestra los tres anuncios y cambia los gráficos y puntos al seleccionar uno
   const user = userEvent.setup();
   const { container } = render(<Results id={1} go={vi.fn()} />);
   const selector = await screen.findByLabelText("Vista del mapa");
+  expect(screen.getByText(/Anuncio 3 acumuló el mayor tiempo/)).toBeTruthy();
+  const toggle = screen.getByRole("button", { name: "Mostrar cuadrantes" });
+  await user.click(toggle);
+  expect(container.querySelectorAll(".quadrant-overlay")).toHaveLength(3);
   expect(container.querySelectorAll(".gaze-points circle")).toHaveLength(3);
   const comparison = screen.getByRole("figure", {
     name: "Comparación de anuncios en segundos",
@@ -67,6 +71,9 @@ it("muestra los tres anuncios y cambia los gráficos y puntos al seleccionar uno
   expect(within(comparison).getByText("12 s")).toBeTruthy();
   expect(screen.getByText("Área sin anuncio")).toBeTruthy();
   await user.selectOptions(selector, "1");
+  expect(container.querySelectorAll(".quadrant-overlay")).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Ocultar cuadrantes" }));
+  expect(container.querySelectorAll(".quadrant-overlay")).toHaveLength(0);
   expect(container.querySelectorAll(".gaze-points circle")).toHaveLength(1);
   const zones = screen.getByRole("figure", { name: "Segundos por cuadrante" });
   expect(within(zones).getAllByRole("listitem")).toHaveLength(4);

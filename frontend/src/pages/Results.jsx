@@ -12,10 +12,12 @@ import { api } from "../api";
 import { EMO, REASONS, secs } from "../config";
 import { Badge, Empty, Stat, ErrorBox } from "../components/ui";
 import { GazePoints } from "../components/GazePoints";
+import { OverviewSummary } from "../components/OverviewSummary";
 import { ResultBars, QuadrantSummary } from "../components/ResultBars";
 
 function Results({ id, go }) {
   const [selectedAd, setSelectedAd] = useState("");
+  const [showQuadrants, setShowQuadrants] = useState(false);
   const [data, setData] = useState(null),
     [error, setError] = useState("");
   useEffect(() => {
@@ -89,9 +91,17 @@ function Results({ id, go }) {
               }))}
             />
           </section>
+          {!selected && <OverviewSummary ads={data.ads} />}
           <section className="panel">
             <div className="panelhead">
               <h2>Mapa de puntos de mirada</h2>
+              <button
+                className="btn secondary"
+                aria-pressed={showQuadrants}
+                onClick={() => setShowQuadrants((shown) => !shown)}
+              >
+                {showQuadrants ? "Ocultar cuadrantes" : "Mostrar cuadrantes"}
+              </button>
             </div>
             <label htmlFor="gaze-ad">Vista del mapa</label>
             <select
@@ -107,7 +117,11 @@ function Results({ id, go }) {
               ))}
             </select>
             {selected ? (
-              <GazePoints study={data.study} ad={selected} />
+              <GazePoints
+                study={data.study}
+                ad={selected}
+                showQuadrants={showQuadrants}
+              />
             ) : (
               <>
                 <div className={"gaze-overview n" + data.study.slots.length}>
@@ -126,7 +140,12 @@ function Results({ id, go }) {
                             : 1,
                       }}
                     >
-                      <GazePoints ad={ad} study={data.study} compact />
+                      <GazePoints
+                        ad={ad}
+                        study={data.study}
+                        compact
+                        showQuadrants={showQuadrants}
+                      />
                       <span className="gaze-overview-title">{ad.title}</span>
                     </div>
                   ))}
