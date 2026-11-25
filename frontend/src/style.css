@@ -1207,6 +1207,21 @@ td .textbtn {
   overflow: hidden;
   border-radius: 7px;
 }
+.gaze-points {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 16px;
+}
+.gaze-points svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.gaze-points > .advisual {
+  position: absolute;
+  inset: 0;
+}
 .heatwrap canvas {
   position: absolute;
   inset: 0;

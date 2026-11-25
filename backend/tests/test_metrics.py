@@ -93,6 +93,9 @@ def test_results_derive_quadrants_from_saved_observations(app, client):
     assert result['quadrant_seconds'] == 3.5
     ads = {ad['id']: ad for ad in result['ads']}
     assert ads[first]['seconds'] == 2.5
+    assert len(ads[first]['points']) == 8
+    assert all(point['x'] < 0.5 for point in ads[first]['points'])
+    assert len(ads[second]['points']) == 2
     assert ads[first]['quadrant_seconds'] == 2
     assert ads[first]['quadrants'] == [
         {'key': 'top_left', 'label': 'Superior izquierdo', 'seconds': 0.5},

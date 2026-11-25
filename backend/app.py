@@ -489,6 +489,7 @@ def create_app(config=None):
             rows = [o for o in observations if o.study_ad_id == a.id]
             seconds = sum(o.estimated_seconds for o in rows)
             ads.append(dict(**a.public(), seconds=round(seconds, 2), samples=len(rows),
+                            points=[dict(x=o.x, y=o.y) for o in rows if o.valid],
                             quadrant_seconds=round(sum(zones[a.id]), 2),
                             quadrants=[dict(key=key, label=label, seconds=round(duration, 2))
                                        for (key, label), duration in zip(QUADRANTS, zones[a.id])],

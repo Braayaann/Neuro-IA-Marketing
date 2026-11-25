@@ -11,13 +11,15 @@ import {
 import { api } from "../api";
 import { EMO, REASONS, secs } from "../config";
 import { Badge, Empty, Stat, ErrorBox } from "../components/ui";
-import { Heatmap, AdGrid } from "../components/AdGrid";
+import { GazePoints } from "../components/GazePoints";
 
 function Results({ id, go }) {
+  const [selectedAd, setSelectedAd] = useState("");
   const [data, setData] = useState(null),
     [error, setError] = useState("");
   useEffect(() => {
     setData(null);
+    setSelectedAd("");
     api("/studies/" + id + "/results")
       .then(setData)
       .catch((e) => setError(e.message));
@@ -75,16 +77,17 @@ function Results({ id, go }) {
           <div className="resultgrid">
             <section className="panel">
               <div className="panelhead">
-                <h2>Mapa de mirada estimada</h2>
-                <span className="tinybadge">Densidad de muestras</span>
+                <h2>Mapa de puntos de mirada</h2>
               </div>
-              <Heatmap points={data.points}>
-                <AdGrid slots={data.study.slots} />
-              </Heatmap>
-              <p className="small muted">
-                La intensidad representa acumulación de muestras válidas, no
-                precisión ni tiempo exacto de fijación.
-              </p>
+              {data.ads.length > 0 && <>
+                <label htmlFor="gaze-ad">Anuncio</label>
+                <select id="gaze-ad" value={selectedAd || data.ads[0].id}
+                  onChange={(event) => setSelectedAd(event.target.value)}>
+                  {data.ads.map((ad) => <option key={ad.id} value={ad.id}>{ad.title}</option>)}
+                </select>
+                <GazePoints study={data.study}
+                  ad={data.ads.find((ad) => String(ad.id) === selectedAd) || data.ads[0]} />
+              </>}
             </section>
             <section className="panel">
               <h2>Comparación de anuncios</h2>
