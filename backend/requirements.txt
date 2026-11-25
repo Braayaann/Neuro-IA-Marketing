@@ -6,3 +6,4 @@ python-dotenv>=1.1,<2
 Pillow>=11,<13
 alembic>=1.16,<2
 waitress>=3,<4
+numpy>=1.26,<3

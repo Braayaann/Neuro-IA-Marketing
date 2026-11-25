@@ -1,3 +1,7 @@
+# Version actual con SQLite
+
+La rama main usa SQLite por defecto. La configuracion actual y el despliegue estan en [PYTHONANYWHERE.md](PYTHONANYWHERE.md). Las instrucciones PostgreSQL que siguen documentan la version anterior y solo aplican si se configura DATABASE_URL.
+
 # Primera versión web · Neuro IA Marketing
 
 React + Flask + PostgreSQL. Mantiene la prueba de escritorio `main.py` y reutiliza

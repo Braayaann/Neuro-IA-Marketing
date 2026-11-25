@@ -133,3 +133,6 @@ El ajuste usa la señal del estimador seleccionado. Mover o girar la cabeza toda
 
 RMN: https://github.com/phamquiluan/ResidualMaskingNetwork
 Pesos: https://huggingface.co/phamquiluan/ResidualMaskingNetwork
+
+## SQLite y PythonAnywhere
+La web usa SQLite por defecto. Consulta docs/PYTHONANYWHERE.md.

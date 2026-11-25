@@ -2,14 +2,10 @@ import io
 import os
 import sys
 from pathlib import Path
-from uuid import uuid4
 
-import psycopg
-from psycopg import sql
 import pytest
 from PIL import Image
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from werkzeug.security import generate_password_hash
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -19,15 +15,7 @@ from backend.models import User, db
 
 @pytest.fixture
 def app(tmp_path):
-    # Base efímera independiente. Nunca se borran tablas de neuroia ni se usa SQLite.
-    base = create_app().config['SQLALCHEMY_DATABASE_URI']
-    url = make_url(os.getenv('TEST_DATABASE_URL', base))
-    name = 'neuroia_test_' + uuid4().hex
-    params = dict(host=url.host, port=url.port or 5432, user=url.username,
-                  password=url.password, dbname='postgres', autocommit=True)
-    with psycopg.connect(**params) as con:
-        con.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
-    test_url = url.set(database=name).render_as_string(hide_password=False)
+    test_url = 'sqlite:///' + str(tmp_path/'test.sqlite')
     app = create_app({'TESTING':True, 'SECRET_KEY':'test-only-key', 'SQLALCHEMY_DATABASE_URI':test_url,
                       'UPLOAD_DIR':str(tmp_path/'uploads')})
     with app.app_context():
@@ -39,11 +27,6 @@ def app(tmp_path):
     with app.app_context():
         db.session.remove()
         db.engine.dispose()
-    assert name.startswith('neuroia_test_') and len(name)==45
-    with psycopg.connect(**params) as con:
-        con.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
-
-
 @pytest.fixture
 def client(app):
     return app.test_client()

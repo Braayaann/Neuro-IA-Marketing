@@ -4,9 +4,7 @@ Set-Location $PSScriptRoot
 if (-not (Test-Path -LiteralPath $Python)) { throw 'Primero crea .venv con Python 3.12 o pasa -Python con la ruta de tu intérprete.' }
 function Run-Python { & $Python @args; if ($LASTEXITCODE -ne 0) { throw 'Falló un paso de preparación.' } }
 Run-Python -m pip install -r backend/requirements.txt
-Run-Python scripts/postgres_local.py install
-Run-Python scripts/postgres_local.py start
-Run-Python -m alembic upgrade head
+Run-Python -m flask --app servidor init-db
 Run-Python scripts/crear_acceso_local.py
 if (Get-Command npm.cmd -ErrorAction SilentlyContinue) {
     Push-Location frontend
