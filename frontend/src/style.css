@@ -1213,7 +1213,7 @@ td .textbtn {
   overflow: hidden;
   margin-top: 16px;
 }
-.gaze-points svg {
+.gaze-points > svg {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -1222,6 +1222,37 @@ td .textbtn {
   position: absolute;
   inset: 0;
 }
+.gaze-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 16px;
+  background: #eff1e9;
+}
+.gaze-overview.n1 { grid-template-columns: 1fr; }
+.gaze-overview-cell { position: relative; min-width: 0; }
+.gaze-overview .gaze-points { margin-top: 0; }
+.gaze-overview-title {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  padding: 3px 7px;
+  background: #ffffffe6;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.gaze-unused { display: grid; place-items: center; color: #647067; font-size: 12px; }
+.result-bars { margin: 16px 0; }
+.result-bars figcaption { color: #647067; font-size: 12px; margin-bottom: 16px; }
+.result-bars ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 18px; }
+.result-bar-label { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 7px; font-size: 14px; }
+.result-bar-label span { overflow-wrap: anywhere; }
+.result-bar-label strong { white-space: nowrap; }
+.result-bar-track { height: 14px; background: #edf0e9; border-radius: 4px; overflow: hidden; }
+.result-bar-track span { display: block; height: 100%; background: #367256; border-radius: 4px; }
+.quadrant-summary { background: #eff6e9; padding: 14px; border-radius: 8px; }
 .heatwrap canvas {
   position: absolute;
   inset: 0;
