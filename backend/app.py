@@ -455,6 +455,8 @@ def create_app(config=None):
     @auth
     def start(sid):
         s = get_study(sid, lock=True, write=True)
+        if not s.slots:
+            problem('Selecciona al menos un anuncio antes de comenzar.', 409)
         if s.status != 'ready' or not s.calibration or not s.calibration.coefficients:
             problem('Completa la calibración antes de comenzar.', 409)
         s.status, s.started_at = 'running', utcnow()

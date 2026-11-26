@@ -102,6 +102,19 @@ describe('Flujos principales del frontend',()=>{
     expect(requests).toHaveLength(0);
   });
 
+  it('explica los requisitos para iniciar y reserva Cerrar sesión para la cuenta', async()=>{
+    state.user=user;
+    state.studies=[{id:15,name:'Preparación',status:'draft',slots:[],calibrated:false}];
+    location.hash='exhibit/15';
+    render(<App/>);
+    const start=await screen.findByRole('button',{name:'Iniciar exhibición'});
+    expect(start.disabled).toBe(true);
+    const reasons=within(screen.getByRole('list',{name:'Pendiente para iniciar'}));
+    expect(reasons.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByRole('button',{name:'Cancelar preparación'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Cerrar sesión'})).toBeNull();
+  });
+
   it('permite sustituir anuncios desde preparación y actualiza la vista conjunta en la misma sesión',async()=>{
     const u=userEvent.setup();
     state.user=user;

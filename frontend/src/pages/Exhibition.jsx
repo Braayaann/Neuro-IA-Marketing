@@ -88,7 +88,13 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
       }
       streamRef.current = s;
       setStream(s);
-      s.getVideoTracks()[0].addEventListener("ended", () => {
+      const track = s.getVideoTracks()[0];
+      track.addEventListener("mute", () => setCaptureReady(false));
+      track.addEventListener("unmute", () => {
+        if (streamRef.current === s) setCaptureReady(Boolean(video.current?.videoWidth));
+      });
+      track.addEventListener("ended", () => {
+        if (streamRef.current !== s) return;
         setCaptureReady(false);
         setError(
           "La cámara se desconectó. Detén la sesión y vuelve a conectar.",
@@ -193,11 +199,15 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
     }
   }
   async function run() {
+    if (startRequirements.length || busy) return;
     setError("");
     setBusy(true);
     try {
       if (display.current.requestFullscreen && !document.fullscreenElement)
         await display.current.requestFullscreen();
+      const track = streamRef.current?.getVideoTracks()[0];
+      if (track?.readyState !== "live" || track.muted)
+        throw new Error("Conecta una cámara con señal antes de iniciar.");
       const s = await post(`/studies/${id}/start`);
       setStudy(s);
       setPhase("running");
@@ -283,6 +293,18 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
         </Button>
       </div>
     );
+  const track = stream?.getVideoTracks()[0];
+  const setupRequirements = [];
+  if (!study.slots.length) setupRequirements.push("Selecciona al menos un anuncio.");
+  if (!captureReady || track?.readyState !== "live" || track.muted)
+    setupRequirements.push("Conecta una cámara con señal.");
+  if (!status?.enabled || !status?.mediapipe)
+    setupRequirements.push("Habilita el seguimiento de mirada con MediaPipe.");
+  if (study.with_emotions && (!status?.weights || !status?.torch))
+    setupRequirements.push("Carga el modelo de expresiones y PyTorch.");
+  const startRequirements = [...setupRequirements];
+  if (phase !== "ready" || !study.calibrated || study.status !== "ready")
+    startRequirements.push("Completa la calibración de mirada.");
   return (
     <div className="exhibition" ref={display}>
       {editingAds && (
@@ -324,7 +346,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
             icon={Square}
             onClick={stop}
           >
-            {phase === "running" ? "Finalizar sesión" : "Cerrar sesión"}
+            {study.status === "running" ? "Finalizar sesión" : "Cancelar preparación"}
           </Button>
         </div>
       </header>
@@ -494,37 +516,23 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
               </div>
               {study.status === "running" ? (
                 <Button className="full" onClick={stop}>
-                  Finalizar sesión abierta
+                  Finalizar sesión
                 </Button>
               ) : (
                 <>
-                  <Button
-                    className="full"
-                    disabled={
-                      !captureReady ||
-                      busy ||
-                      !status?.enabled ||
-                      !status?.mediapipe ||
-                      (study.with_emotions &&
-                        (!status?.weights || !status?.torch))
-                    }
-                    onClick={phase === "ready" ? run : calibrate}
-                    icon={phase === "ready" ? Play : Target}
-                  >
-                    {busy
-                      ? "Preparando…"
-                      : phase === "ready"
-                        ? "Iniciar exhibición"
-                        : "Calibrar mirada · 9 puntos"}
+                  <Button className="secondary full" icon={Target} onClick={calibrate}
+                    disabled={busy || setupRequirements.length > 0}>
+                    {phase === "ready" ? "Repetir calibración" : "Calibrar mirada · 9 puntos"}
                   </Button>
-                  {phase === "ready" && (
-                    <button
-                      className="textbtn recalin"
-                      onClick={calibrate}
-                      disabled={busy}
-                    >
-                      Repetir calibración
-                    </button>
+                  <Button className="full" icon={Play} onClick={run}
+                    aria-describedby={startRequirements.length ? "start-requirements" : undefined}
+                    disabled={busy || startRequirements.length > 0}>
+                    Iniciar exhibición
+                  </Button>
+                  {startRequirements.length > 0 && (
+                    <ul id="start-requirements" className="small muted" aria-label="Pendiente para iniciar">
+                      {startRequirements.map((reason) => <li key={reason}>{reason}</li>)}
+                    </ul>
                   )}
                 </>
               )}
