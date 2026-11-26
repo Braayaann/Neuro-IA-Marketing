@@ -1109,10 +1109,14 @@ td .textbtn {
   margin-top: 10px;
 }
 .study-filter { max-width: 16rem; margin-bottom: 1rem; }
+.study-delete-cell {
+  width: 1%;
+  text-align: right;
+  padding-inline: 16px 8px;
+}
 .delete-study {
   width: 32px;
   height: 32px;
-  margin-inline-start: 8px;
   align-items: center;
   justify-content: center;
   vertical-align: middle;

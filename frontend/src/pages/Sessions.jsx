@@ -46,6 +46,7 @@ function SessionTable({ studies, go, emptyAction, results = false, ownerId, onDe
             <th>Anuncios</th>
             <th>Estado</th>
             <th />
+            {onDelete && <th scope="col"><span className="sr-only">Eliminar</span></th>}
           </tr>
         </thead>
         <tbody>
@@ -92,13 +93,15 @@ function SessionTable({ studies, go, emptyAction, results = false, ownerId, onDe
                     : "Abrir sesión"}
                   <ArrowRight size={16} />
                 </button>
-                {onDelete && s.owner_id === ownerId && s.status !== "running" && (
+              </td>
+              {onDelete && <td className="study-delete-cell">
+                {s.owner_id === ownerId && s.status !== "running" && (
                   <button className="iconbtn delete-study" aria-label="Eliminar sesión"
                     title={`Eliminar sesión «${s.name}»`} onClick={() => onDelete(s)}>
-                    <Trash2 size={15} aria-hidden="true" />
+                    <Trash2 size={13} strokeWidth={1.5} aria-hidden="true" />
                   </button>
                 )}
-              </td>
+              </td>}
             </tr>
           ))}
         </tbody>
