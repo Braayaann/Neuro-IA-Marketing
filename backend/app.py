@@ -16,7 +16,7 @@ import click
 from dotenv import load_dotenv
 from flask import Flask, abort, g, jsonify, request, send_file, send_from_directory, session
 from PIL import Image, ImageOps, UnidentifiedImageError
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -357,6 +357,17 @@ def create_app(config=None):
     @auth
     def study(sid):
         return jsonify(get_study(sid).public())
+
+    @app.delete('/api/studies/<int:sid>')
+    @auth
+    def delete_study(sid):
+        study = get_study(sid, lock=True, write=True)
+        if study.status == 'running':
+            problem('Finaliza la sesión en curso antes de eliminarla.', 409)
+        db.session.execute(delete(Observation).where(Observation.study_id == sid))
+        db.session.delete(study)
+        db.session.commit()
+        return '', 204
 
     @app.get('/api/vision/status')
     @auth

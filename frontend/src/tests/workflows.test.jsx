@@ -25,6 +25,10 @@ beforeEach(()=>{
     else if(path==='/ads')data=state.ads;
     else if(path==='/studies'&&options.method==='POST')data={id:15,...JSON.parse(options.body)};
     else if(path==='/studies')data=state.studies;
+    else if(path==='/studies/15' && options.method==='DELETE'){
+      state.studies=state.studies.filter(s=>s.id!==15);
+      data={};
+    }
     else if(path==='/studies/15')data=state.studies[0];
     else if(path==='/vision/status')data={enabled:true,mediapipe:true};
     else if(path==='/studies/15/ads' && options.method==='PATCH'){
@@ -41,6 +45,36 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
 describe('Flujos principales del frontend',()=>{
+  it('filtra por estado, permite cancelar y elimina de ambos listados al confirmar',async()=>{
+    const u=userEvent.setup();
+    state.user=user;
+    const study={id:15,owner_id:1,name:'Campaña A',status:'completed',created_at:'2026-01-01',slots:[]};
+    state.studies=[study,{...study,id:16,name:'Otra cuenta',owner_id:2,status:'cancelled'},
+      {...study,id:17,name:'Captura en curso',status:'running'}];
+    location.hash='sessions';
+    render(<App/>);
+    await screen.findByText('Campaña A');
+    expect(screen.getAllByRole('button',{name:'Eliminar sesión'})).toHaveLength(1);
+    const filter=screen.getByLabelText('Filtrar por estado');
+    await u.selectOptions(filter,'cancelled');
+    expect(screen.getByText('Otra cuenta')).toBeTruthy();
+    expect(screen.queryByText('Campaña A')).toBeNull();
+    await u.selectOptions(filter,'completed');
+    await u.click(screen.getByRole('button',{name:'Eliminar sesión'}));
+    const dialog=screen.getByRole('dialog',{name:'Eliminar sesión'});
+    expect(dialog.textContent).toContain('«Campaña A»');
+    expect(dialog.textContent).toContain('sus resultados');
+    await u.click(within(dialog).getByRole('button',{name:'Cancelar'}));
+    expect(requests.some(r=>r.options.method==='DELETE')).toBe(false);
+    expect(screen.getByText('Campaña A')).toBeTruthy();
+    await u.click(screen.getByRole('button',{name:'Eliminar sesión'}));
+    await u.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Eliminar sesión'}));
+    expect(screen.queryByText('Campaña A')).toBeNull();
+    await u.click(screen.getByRole('button',{name:'Resultados'}));
+    expect(screen.getByText('Otra cuenta')).toBeTruthy();
+    expect(screen.queryByText('Campaña A')).toBeNull();
+    expect(requests.filter(r=>r.options.method==='DELETE')).toHaveLength(1);
+  });
   it('permite ingresar y muestra el espacio del dueño sin cuentas de administrador',async()=>{
     const u=userEvent.setup();render(<App/>);
     await u.type(await screen.findByLabelText('Correo electrónico'),'prueba@test.cl');

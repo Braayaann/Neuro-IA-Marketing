@@ -1040,6 +1040,9 @@ td .textbtn {
   display: block;
   margin-top: 10px;
 }
+.study-filter { max-width: 16rem; margin-bottom: 1rem; }
+.textbtn.delete-study { display: block; margin-top: 6px; color: #96362c; }
+.btn.danger { background: #96362c; color: white; }
 .uploadlabel span {
   font-size: 10px;
   font-weight: 400;

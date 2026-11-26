@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowRight,
   Camera,
@@ -12,7 +12,7 @@ import { AdModal } from "./Ads";
 import { fmtDate } from "../config";
 import { Badge, Button, Modal, Empty, ErrorBox } from "../components/ui";
 
-function SessionTable({ studies, go, emptyAction, results = false }) {
+function SessionTable({ studies, go, emptyAction, results = false, ownerId, onDelete }) {
   if (!studies.length)
     return (
       <div className="panel">
@@ -91,12 +91,69 @@ function SessionTable({ studies, go, emptyAction, results = false }) {
                     : "Abrir sesión"}
                   <ArrowRight size={16} />
                 </button>
+                {onDelete && s.owner_id === ownerId && s.status !== "running" && (
+                  <button className="textbtn delete-study" onClick={() => onDelete(s)}>Eliminar sesión</button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function StudyList({ studies, onDeleted, ...props }) {
+  const [filter, setFilter] = useState("all");
+  const [target, setTarget] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const deleting = useRef(false);
+  const visible = filter === "all" ? studies : studies.filter((s) => s.status === filter);
+  function dismiss() {
+    if (!deleting.current) setTarget(null);
+  }
+  async function remove() {
+    if (deleting.current) return;
+    deleting.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/studies/" + target.id, { method: "DELETE" });
+      onDeleted(target.id);
+      setTarget(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      deleting.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <label className="study-filter">Filtrar por estado
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="all">Todas</option>
+          <option value="completed">Finalizadas</option>
+          <option value="cancelled">Canceladas</option>
+        </select>
+      </label>
+      {filter !== "all" && !visible.length ? (
+        <p role="status">No hay sesiones con este estado.</p>
+      ) : (
+        <SessionTable {...props} studies={visible} onDelete={(s) => { setError(""); setTarget(s); }} />
+      )}
+      {target && (
+        <Modal title="Eliminar sesión" onClose={dismiss}>
+          <p>¿Quieres eliminar la sesión <strong>«{target.name}»</strong>? También se eliminarán sus resultados. Esta acción es permanente.</p>
+          <ErrorBox message={error} />
+          <div className="modalactions">
+            <Button className="secondary" disabled={busy} onClick={dismiss}>Cancelar</Button>
+            <Button className="danger" disabled={busy} onClick={remove}>Eliminar sesión</Button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -254,4 +311,4 @@ function StudyAdEditor({ study, ads, onAdSaved, onSave, onClose }) {
   );
 }
 
-export { SessionTable, StudyModal, StudyAdEditor };
+export { SessionTable, StudyList, StudyModal, StudyAdEditor };

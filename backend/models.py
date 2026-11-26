@@ -57,8 +57,8 @@ class Study(db.Model):
     last_seq = db.Column(db.Integer, nullable=False, default=-1)
     last_elapsed = db.Column(db.Float)
     last_ad_id = db.Column(db.Integer)
-    slots = db.relationship('StudyAd', order_by='StudyAd.position', lazy='selectin')
-    calibration = db.relationship('Calibration', uselist=False, lazy='selectin')
+    slots = db.relationship('StudyAd', order_by='StudyAd.position', lazy='selectin', cascade='all, delete-orphan')
+    calibration = db.relationship('Calibration', uselist=False, lazy='selectin', cascade='all, delete-orphan')
     __table_args__ = (CheckConstraint("status IN ('draft','calibrating','ready','running','completed','cancelled')"),)
 
     @property
@@ -66,7 +66,7 @@ class Study(db.Model):
         return self.layout_columns or min(len(self.slots), 2) or 1
 
     def public(self):
-        return dict(id=self.id, layout_columns=self.columns, name=self.name, status=self.status, with_emotions=self.with_emotions,
+        return dict(id=self.id, owner_id=self.owner_id, layout_columns=self.columns, name=self.name, status=self.status, with_emotions=self.with_emotions,
                     created_at=self.created_at.isoformat(),
                     started_at=self.started_at.isoformat() if self.started_at else None,
                     ended_at=self.ended_at.isoformat() if self.ended_at else None,

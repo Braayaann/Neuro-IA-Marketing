@@ -3,7 +3,7 @@ import pytest
 from datetime import timedelta
 from PIL import Image
 from sqlalchemy import select
-from backend.models import Study, Observation, User, db, utcnow
+from backend.models import Study, StudyAd, Calibration, Observation, User, db, utcnow
 from conftest import login, make_study, FakeVision, calibrate, jpeg
 
 
@@ -84,6 +84,32 @@ def test_full_session_and_interval_accounting(app,client):
     assert result['emotions']=={'Alegria':7}
     assert client.get(f'/api/studies/{sid}/export.csv').status_code==200
     assert client.post(f'/api/studies/{sid}/observations',data={},headers=h).status_code==409
+
+
+def test_delete_study_protects_owner_and_running_capture(app, client):
+    h = login(client)
+    study = make_study(client, h)
+    sid = study['id']
+    path = f'/api/studies/{sid}'
+    other = app.test_client()
+    assert other.delete(path, headers=login(other, 'admin@test.cl')).status_code == 403
+    fake = FakeVision()
+    app.extensions['vision'] = fake
+    calibrate(client, h, sid, fake)
+    assert client.post(path + '/start', headers=h).status_code == 200
+    assert client.post(path + '/observations', headers=h, data={
+        'seq': '0', 'elapsed': '0', 'frame': (jpeg(), 'frame.jpg')}).status_code == 200
+    assert client.delete(path, headers=h).status_code == 409
+    assert client.get(path + '/results').json['total_samples'] == 1
+    assert client.post(path + '/stop', headers=h).status_code == 200
+    assert client.delete(path, headers=h).status_code == 204
+    assert client.get(path + '/results').status_code == 404
+    assert client.get('/api/studies').json == []
+    assert len(client.get('/api/ads').json) == 2
+    with app.app_context():
+        assert db.session.get(Calibration, sid) is None
+        for model in (Observation, StudyAd):
+            assert db.session.scalar(select(model.id).where(model.study_id == sid)) is None
 
 
 def test_calibration_insufficient_and_degenerate(app,client):

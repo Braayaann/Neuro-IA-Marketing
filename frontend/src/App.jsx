@@ -18,7 +18,7 @@ import { api, post } from "./api";
 import { Brand, Button, ErrorBox, Stat, Modal } from "./components/ui";
 import { Login } from "./pages/Login";
 import { Ads, AdModal } from "./pages/Ads";
-import { SessionTable, StudyModal } from "./pages/Sessions";
+import { SessionTable, StudyList, StudyModal } from "./pages/Sessions";
 import { Results } from "./pages/Results";
 import { Exhibition } from "./pages/Exhibition";
 import { UserModal } from "./pages/Users";
@@ -116,6 +116,7 @@ function App() {
   ];
   const selected = route.split("/")[0];
   const finished = studies.filter((s) => s.status === "completed");
+  const removeStudy = (id) => setStudies((list) => list.filter((study) => study.id !== id));
   const title = {
     overview: "Una mirada a tu espacio.",
     ads: "Ideas que merecen ser vistas.",
@@ -311,8 +312,10 @@ function App() {
             />
           )}
           {selected === "sessions" && (
-            <SessionTable
+            <StudyList
               studies={studies}
+              ownerId={user.id}
+              onDeleted={removeStudy}
               go={go}
               emptyAction={() => setModal({ type: "study" })}
             />
@@ -321,10 +324,12 @@ function App() {
             (route.includes("/") ? (
               <Results id={Number(route.split("/")[1])} go={go} />
             ) : (
-              <SessionTable
+              <StudyList
                 studies={studies.filter((s) =>
-                  ["completed", "running"].includes(s.status),
+                  ["completed", "cancelled", "running"].includes(s.status),
                 )}
+                ownerId={user.id}
+                onDeleted={removeStudy}
                 go={go}
                 results
               />
