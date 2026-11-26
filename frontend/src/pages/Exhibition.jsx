@@ -8,7 +8,7 @@ import { studyColumns } from "../layout";
 import { AdGrid } from "../components/AdGrid";
 import { StudyAdEditor } from "./Sessions";
 
-function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeControl }) {
+function Exhibition({ id, ownerId, ads, onAdSaved, onStudySaved, onExit, onBack, themeControl }) {
   const [study, setStudy] = useState(null),
     [editingAds, setEditingAds] = useState(false),
     [error, setError] = useState(""),
@@ -512,7 +512,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
                 <AdGrid slots={study.slots} columns={studyColumns(study)} />
               </div>
               {phase === "setup" && study.status === "draft" &&
-                study.slots.every((slot) => ads.some((ad) => ad.id === slot.ad_id)) && (
+                study.owner_id === ownerId && (
                 <Button className="secondary" disabled={busy} onClick={() => setEditingAds(true)}>
                   Modificar anuncios
                 </Button>

@@ -86,7 +86,7 @@ class StudyAd(db.Model):
     __tablename__ = 'study_ads'
     id = db.Column(db.Integer, primary_key=True)
     study_id = db.Column(db.ForeignKey('studies.id'), nullable=False, index=True)
-    ad_id = db.Column(db.ForeignKey('ads.id'), nullable=False)
+    ad_id = db.Column(db.ForeignKey('ads.id', ondelete='SET NULL'))
     position = db.Column(db.Integer, nullable=False)
     # Snapshot: las sesiones históricas no cambian al editar un anuncio.
     title = db.Column(db.String(140), nullable=False)

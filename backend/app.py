@@ -254,6 +254,24 @@ def create_app(config=None):
         db.session.commit()
         return jsonify(ad.public()), 200 if aid else 201
 
+    @app.delete('/api/ads/<int:aid>')
+    @auth
+    def delete_ad(aid):
+        ad = db.session.scalar(select(Ad).where(Ad.id == aid).with_for_update())
+        if ad is None:
+            abort(404)
+        if ad.owner_id != g.user.id:
+            abort(403)
+        filename = ad.image
+        db.session.delete(ad)
+        db.session.commit()
+        if filename and not db.session.scalar(select(StudyAd.id).where(StudyAd.image == filename).limit(1)):
+            try:
+                (Path(app.config['UPLOAD_DIR']) / filename).unlink(missing_ok=True)
+            except OSError:
+                app.logger.warning('No se pudo retirar del disco la imagen del anuncio eliminado %s.', aid)
+        return '', 204
+
     def store_image():
         f = request.files.get('image')
         if not f:
@@ -312,7 +330,8 @@ def create_app(config=None):
     def selected_ads(ids):
         if not isinstance(ids, list) or not 1 <= len(ids) <= 4 or any(type(i) is not int for i in ids) or len(set(ids)) != len(ids):
             problem('Selecciona de uno a cuatro anuncios diferentes.')
-        selected = list(db.session.scalars(select(Ad).where(Ad.id.in_(ids), Ad.owner_id == g.user.id, Ad.active.is_(True))))
+        selected = list(db.session.scalars(select(Ad).where(
+            Ad.id.in_(ids), Ad.owner_id == g.user.id, Ad.active.is_(True)).with_for_update(read=True)))
         if len(selected) != len(ids):
             problem('Uno de los anuncios no está disponible.', 403)
         by_id = {ad.id: ad for ad in selected}

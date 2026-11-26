@@ -2,14 +2,37 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowRight,
   ImagePlus,
-  MoreHorizontal,
+  Trash2,
   Plus,
   Search,
 } from "lucide-react";
 import { api } from "../api";
 import { AdVisual, Button, Modal, Empty, ErrorBox } from "../components/ui";
 
-function Ads({ ads, edit, create }) {
+function Ads({ ads, edit, create, onDeleted }) {
+  const [target, setTarget] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const deleting = useRef(false);
+  function dismiss() {
+    if (!deleting.current) setTarget(null);
+  }
+  async function remove() {
+    if (deleting.current) return;
+    deleting.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/ads/" + target.id, { method: "DELETE" });
+      onDeleted(target.id);
+      setTarget(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      deleting.current = false;
+      setBusy(false);
+    }
+  }
   const [search, setSearch] = useState(""),
     [archived, setArchived] = useState(false);
   const filtered = ads.filter(
@@ -54,10 +77,11 @@ function Ads({ ads, edit, create }) {
                   <h3>{a.title}</h3>
                   <button
                     className="iconbtn"
-                    aria-label={"Editar " + a.title}
-                    onClick={() => edit(a)}
+                    aria-label={"Eliminar " + a.title}
+                    title="Eliminar anuncio"
+                    onClick={() => { setError(""); setTarget(a); }}
                   >
-                    <MoreHorizontal size={21} />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                 </div>
                 <p>{a.description || "Sin descripción"}</p>
@@ -98,6 +122,14 @@ function Ads({ ads, edit, create }) {
           </Empty>
         </div>
       )}
+      {target && <Modal title="Eliminar anuncio" onClose={dismiss}>
+        <p>¿Seguro que quieres eliminar <strong>«{target.title}»</strong> de Mis anuncios? Las sesiones que ya lo incluyen conservarán su copia.</p>
+        <ErrorBox message={error} />
+        <div className="modalactions">
+          <Button className="secondary" onClick={dismiss} disabled={busy}>Cancelar</Button>
+          <Button className="danger" onClick={remove} disabled={busy}>Eliminar anuncio</Button>
+        </div>
+      </Modal>}
     </>
   );
 }

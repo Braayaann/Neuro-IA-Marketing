@@ -121,6 +121,7 @@ function App() {
   if (route.startsWith("exhibit/"))
     return (
       <Exhibition
+        ownerId={user.id}
         themeControl={themeControl}
         id={Number(route.split("/")[1])}
         ads={ads}
@@ -334,6 +335,10 @@ function App() {
           {selected === "ads" && (
             <Ads
               ads={ads}
+              onDeleted={(id) => {
+                setAds((list) => list.filter((ad) => ad.id !== id));
+                notify("Anuncio eliminado");
+              }}
               edit={(ad) => setModal({ type: "ad", data: ad })}
               create={() => setModal({ type: "ad" })}
             />

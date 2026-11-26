@@ -272,7 +272,7 @@ function StudyModal({ ads, onClose, created, createAd }) {
 }
 
 function StudyAdEditor({ study, ads, onAdSaved, onSave, onClose }) {
-  const [selected, setSelected] = useState(() => study.slots.map((slot) => slot.ad_id));
+  const [selected, setSelected] = useState(() => study.slots.map((slot) => slot.ad_id).filter((id) => id != null));
   const [editor, setEditor] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -299,6 +299,9 @@ function StudyAdEditor({ study, ads, onAdSaved, onSave, onClose }) {
   );
   return (
     <Modal title="Modificar anuncios de la sesión" onClose={onClose}>
+      {study.slots.some((slot) => slot.ad_id == null) && (
+        <p>Hay anuncios eliminados del catálogo. Al guardar se usarán únicamente los anuncios seleccionados aquí.</p>
+      )}
       <AdPicker ads={ads} selected={selected} setSelected={setSelected} />
       <Button className="secondary" icon={Plus} onClick={() => setEditor({})}>Crear anuncio</Button>
       {selected.map((id) => {

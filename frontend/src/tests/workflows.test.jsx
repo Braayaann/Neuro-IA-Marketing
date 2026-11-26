@@ -23,6 +23,7 @@ beforeEach(()=>{
     else if(path==='/auth/login'){state.user=user;data={user,csrf:'new-token'}}
     else if(path==='/ads'&&options.method==='POST'){data={id:9,...JSON.parse(options.body)};state.ads.push(data)}
     else if(path==='/ads')data=state.ads;
+    else if(path==='/ads/9' && options.method==='DELETE')data={};
     else if(path==='/studies/15/calibration/start')data={ok:true};
     else if(path==='/studies'&&options.method==='POST')data={id:15,...JSON.parse(options.body)};
     else if(path==='/studies')data=state.studies;
@@ -46,6 +47,22 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
 describe('Flujos principales del frontend',()=>{
+  it('confirma el anuncio antes de eliminarlo del catálogo', async()=>{
+    state.user=user;
+    state.ads=[{id:9,title:'Cartel',active:true}];
+    location.hash='ads';
+    const u=userEvent.setup();
+    render(<App/>);
+    await u.click(await screen.findByRole('button',{name:'Eliminar Cartel'}));
+    expect(screen.getByRole('dialog').textContent).toContain('«Cartel»');
+    await u.click(screen.getByRole('button',{name:'Cancelar'}));
+    expect(requests.some(r=>r.options.method==='DELETE')).toBe(false);
+    await u.click(screen.getByRole('button',{name:'Eliminar Cartel'}));
+    await u.click(screen.getByRole('button',{name:'Eliminar anuncio'}));
+    expect(screen.queryByText('Cartel')).toBeNull();
+    expect(requests.filter(r=>r.path==='/ads/9'&&r.options.method==='DELETE')).toHaveLength(1);
+  });
+
   it('calibra contra el área visible y vuelve a preparación si se pierde la cámara',async()=>{
     state.user=user;
     state.studies=[{id:15,name:'Prueba',status:'draft',slots:[{id:1,position:0}]}];
@@ -196,7 +213,7 @@ describe('Flujos principales del frontend',()=>{
     state.ads=[{id:1,title:'Retrato',image_url:'/retrato.jpg',active:true},
       {id:2,title:'Paisaje',image_url:'/paisaje.jpg',active:true},
       {id:3,title:'Texto',active:true}];
-    state.studies=[{id:15,name:'Prueba',status:'draft',slots:[{...state.ads[0],ad_id:1,position:0}]}];
+    state.studies=[{id:15,owner_id:1,name:'Prueba',status:'draft',slots:[{...state.ads[0],ad_id:1,position:0}]}];
     location.hash='exhibit/15';
     render(<App/>);
     await u.click(await screen.findByRole('button',{name:'Modificar anuncios'}));

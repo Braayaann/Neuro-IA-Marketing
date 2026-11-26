@@ -45,6 +45,22 @@ def test_auth_csrf_and_roles(client):
     assert client.post('/api/ads',json={'title':'<script>texto</script>'},headers=h).status_code==201
 
 
+def test_delete_image_ad_preserves_snapshot_and_report(app, client):
+    h = login(client)
+    ad = client.post('/api/ads', headers=h, data={'title':'Original', 'image':(jpeg(),'a.jpg')}).json
+    path = f"/api/ads/{ad['id']}"
+    s = client.post('/api/studies', headers=h, json={'name':'Histórico','ad_ids':[ad['id']]}).json
+    other = app.test_client()
+    assert other.delete(path, headers=login(other,'other@test.cl')).status_code == 403
+    assert client.delete(path, headers=h).status_code == 204
+    assert client.get('/api/ads').json == []
+    assert client.delete(path, headers=h).status_code == 404
+    result = client.get(f"/api/studies/{s['id']}/results").json['ads'][0]
+    assert result['ad_id'] is None and result['title'] == ad['title']
+    assert result['image_url'] == ad['image_url'] and client.get(ad['image_url']).status_code == 200
+    assert client.get(f"/api/studies/{s['id']}/export.pdf").status_code == 200
+
+
 def test_calibration_rejects_inconsistent_vertical_signal(app, client):
     from mirada.calibracion import OBJETIVOS
     headers = login(client)
