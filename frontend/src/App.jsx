@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -24,6 +24,30 @@ import { Exhibition } from "./pages/Exhibition";
 import { UserModal } from "./pages/Users";
 
 function App() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("neuroia.theme") === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  function changeTheme(next) {
+    setTheme(next);
+    try {
+      localStorage.setItem("neuroia.theme", next);
+    } catch {
+      // El tema sigue disponible en esta pestaña si el navegador bloquea el almacenamiento.
+    }
+  }
+  const themeControl = (
+    <div className="theme-control" role="group" aria-label="Apariencia">
+      <button type="button" aria-pressed={theme === "light"} onClick={() => changeTheme("light")}>Claro</button>
+      <button type="button" aria-pressed={theme === "dark"} onClick={() => changeTheme("dark")}>Oscuro</button>
+    </div>
+  );
   const [user, setUser] = useState(undefined),
     [route, setRoute] = useState(location.hash.slice(1) || "overview"),
     [error, setError] = useState(""),
@@ -85,6 +109,7 @@ function App() {
     return (
       <>
         <Login
+          themeControl={themeControl}
           onLogin={(u) => {
             setUser(u);
             go("overview");
@@ -96,6 +121,7 @@ function App() {
   if (route.startsWith("exhibit/"))
     return (
       <Exhibition
+        themeControl={themeControl}
         id={Number(route.split("/")[1])}
         ads={ads}
         onAdSaved={(ad) => setAds((list) => [ad, ...list.filter((item) => item.id !== ad.id)])}
@@ -191,6 +217,7 @@ function App() {
             </strong>
           </div>
           <div className="profile">
+            {themeControl}
             <span className="localchip">
               <i />
               Entorno local

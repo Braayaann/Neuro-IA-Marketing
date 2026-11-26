@@ -3,7 +3,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import { post } from "../api";
 import { Brand, Button, ErrorBox } from "../components/ui";
 
-function Login({ onLogin }) {
+function Login({ onLogin, themeControl }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function submit(e) {
@@ -52,6 +52,7 @@ function Login({ onLogin }) {
       </section>
       <section className="loginform">
         <div className="loginbox">
+          {themeControl}
           <span className="eyebrow">TU ESPACIO DE ANÁLISIS</span>
           <h2>Bienvenido de nuevo.</h2>
           <p>Ingresa para gestionar tus anuncios y sesiones.</p>

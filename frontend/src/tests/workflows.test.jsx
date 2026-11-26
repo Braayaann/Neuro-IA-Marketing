@@ -45,6 +45,22 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
 describe('Flujos principales del frontend',()=>{
+  it('mantiene el tema elegido al entrar, navegar y volver a abrir el portal', async()=>{
+    const u=userEvent.setup();
+    localStorage.removeItem('neuroia.theme');
+    const first=render(<App/>);
+    await u.click(await screen.findByRole('button',{name:'Oscuro'}));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    first.unmount();
+    state.user=user;
+    render(<App/>);
+    expect((await screen.findByRole('button',{name:'Oscuro'})).getAttribute('aria-pressed')).toBe('true');
+    await u.click(screen.getByRole('button',{name:'Sesiones'}));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    await u.click(screen.getByRole('button',{name:'Claro'}));
+    expect(localStorage.getItem('neuroia.theme')).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
   it('filtra por estado, permite cancelar y elimina de ambos listados al confirmar',async()=>{
     const u=userEvent.setup();
     state.user=user;

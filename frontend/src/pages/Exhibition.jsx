@@ -7,7 +7,7 @@ import { studyColumns } from "../layout";
 import { AdGrid } from "../components/AdGrid";
 import { StudyAdEditor } from "./Sessions";
 
-function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
+function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeControl }) {
   const [study, setStudy] = useState(null),
     [editingAds, setEditingAds] = useState(false),
     [error, setError] = useState(""),
@@ -402,6 +402,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
       ) : (
         <main className="setup">
           <div className="setupheading">
+            {themeControl}
             <span className="eyebrow">ANTES DE EMPEZAR</span>
             <h1>
               {phase === "ready"
