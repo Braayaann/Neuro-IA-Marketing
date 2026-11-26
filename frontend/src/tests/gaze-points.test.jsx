@@ -11,7 +11,7 @@ it('ubica puntos respecto al anuncio y conserva porcentajes al redimensionar', (
   const circle = container.querySelector('circle');
   expect(circle.getAttribute('cx')).toBe('25%');
   expect(circle.getAttribute('cy')).toBe('75%');
-  expect(circle.getAttribute('r')).toBe('2');
+  expect(2 * Number(circle.getAttribute('r')) + Number(circle.getAttribute('stroke-width'))).toBe(4);
   container.style.width = '320px';
   rerender(<GazePoints study={study} ad={ad} />);
   expect(container.querySelector('circle').getAttribute('cx')).toBe('25%');

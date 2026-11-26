@@ -47,11 +47,10 @@ export function GazePoints({
               key={index}
               cx={`${p.x * 100}%`}
               cy={`${p.y * 100}%`}
-              r="2"
-              fill="#f05223"
-              fillOpacity="0.65"
-              stroke="white"
-              strokeWidth="0.5"
+              r="1.5"
+              fill="#151b18"
+              stroke="#fff"
+              strokeWidth="1"
             />
           ))}
         </svg>

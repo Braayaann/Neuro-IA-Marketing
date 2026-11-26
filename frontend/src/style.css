@@ -1262,6 +1262,7 @@ td .textbtn {
 .quadrant-overlay::before { left: 50%; top: 0; width: 1px; height: 100%; }
 .quadrant-overlay::after { top: 50%; left: 0; height: 1px; width: 100%; }
 .quadrant-overlay span {
+  color: #20392f;
   align-self: start;
   justify-self: start;
   margin: 5px;
@@ -1287,6 +1288,7 @@ td .textbtn {
 .gaze-overview-cell { position: relative; min-width: 0; }
 .gaze-overview .gaze-points { margin-top: 0; }
 .gaze-overview-title {
+  color: #20392f;
   position: absolute;
   bottom: 8px;
   left: 8px;
