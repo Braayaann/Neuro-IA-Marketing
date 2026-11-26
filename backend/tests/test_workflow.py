@@ -88,13 +88,14 @@ def test_full_session_and_interval_accounting(app,client):
     assert client.post(f'/api/studies/{sid}/observations',data={},headers=h).status_code==409
 
 
-def test_cancelled_export_is_blocked_on_direct_request(client):
+@pytest.mark.parametrize('extension', ['csv', 'pdf'])
+def test_cancelled_export_is_blocked_on_direct_request(client, extension):
     headers = login(client)
     study = make_study(client, headers)
     path = f"/api/studies/{study['id']}"
     cancelled = client.post(path + '/stop', headers=headers).json
     assert cancelled['status'] == 'cancelled'
-    response = client.get(path + '/export.csv')
+    response = client.get(path + '/export.' + extension)
     assert response.status_code == 409
     assert response.json['error'] == cancelled['export_block_reason'] == 'Las sesiones canceladas no se pueden exportar'
     assert 'Content-Disposition' not in response.headers

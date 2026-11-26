@@ -88,6 +88,7 @@ it("muestra los tres anuncios y cambia los gráficos y puntos al seleccionar uno
   expect(within(comparison).getByText("12 s")).toBeTruthy();
   expect(screen.getByText("Área sin anuncio")).toBeTruthy();
   await user.selectOptions(selector, "1");
+  expect(screen.getByRole("link", {name: "Descargar reporte PDF"}).getAttribute("href")).toBe("/api/studies/1/export.pdf");
   expect(container.querySelectorAll(".quadrant-overlay")).toHaveLength(1);
   await user.click(screen.getByRole("button", { name: "Ocultar cuadrantes" }));
   expect(container.querySelectorAll(".quadrant-overlay")).toHaveLength(0);
@@ -149,6 +150,7 @@ it("explica el bloqueo de exportación en una sesión cancelada", async () => {
   api.mockResolvedValue(data);
   render(<Results id={2} go={vi.fn()} />);
   expect((await screen.findByRole("button", {name:"Exportar CSV"})).disabled).toBe(true);
+  expect(screen.getByRole("button", {name:"Descargar reporte PDF"}).disabled).toBe(true);
   expect(screen.queryByRole("link",{name:"Exportar CSV"})).toBeNull();
   expect(screen.getByText(data.study.export_block_reason)).toBeTruthy();
   expect(screen.getByText("0 de 0 muestras válidas")).toBeTruthy();

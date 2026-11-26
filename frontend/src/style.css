@@ -1249,11 +1249,13 @@ td .textbtn {
   font-size: 16px;
 }
 .resultbar {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 25px;
 }
+.result-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
 .resultbar h2 {
   font-size: 23px;
   margin: 12px 0 10px;

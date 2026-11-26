@@ -564,12 +564,25 @@ def create_app(config=None):
     def results(sid):
         return jsonify(result(get_study(sid)))
 
-    @app.get('/api/studies/<int:sid>/export.csv')
-    @auth
-    def export(sid):
+    def exportable_study(sid):
         s = get_study(sid)
         if s.export_block_reason:
             problem(s.export_block_reason, 409)
+        return s
+
+    @app.get('/api/studies/<int:sid>/export.pdf')
+    @auth
+    def export_pdf(sid):
+        from .report import session_pdf
+        s = exportable_study(sid)
+        document = session_pdf(result(s), Path(app.config['UPLOAD_DIR']))
+        return send_file(document, mimetype='application/pdf', as_attachment=True,
+                         download_name=f'neuroia-sesion-{s.id}.pdf')
+
+    @app.get('/api/studies/<int:sid>/export.csv')
+    @auth
+    def export(sid):
+        s = exportable_study(sid)
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         writer.writerow(['secuencia', 'segundos_desde_inicio', 'anuncio_id', 'x_normalizada', 'y_normalizada', 'valida', 'motivo', 'expresion', 'confianza', 'segundos_estimados'])

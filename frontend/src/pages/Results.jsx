@@ -45,20 +45,22 @@ function Results({ id, go }) {
           <h2>{data.study.name}</h2>
           <Badge status={data.study.status} />
         </div>
-        {exportBlock ? (
-          <div>
-            <button className="btn secondary" disabled aria-describedby="export-reason">
-              <ArrowDownToLine size={17} /> Exportar CSV
-            </button>
-            <p id="export-reason" className="small muted">{exportBlock}</p>
+        <div>
+          <div className="result-downloads">
+            {[["csv", "Exportar CSV"], ["pdf", "Descargar reporte PDF"]].map(([format, label]) =>
+              exportBlock ? (
+                <button key={format} className="btn secondary" disabled aria-describedby="export-reason">
+                  <ArrowDownToLine size={17} /> {label}
+                </button>
+              ) : (
+                <a key={format} className="btn secondary" href={`/api/studies/${id}/export.${format}`}>
+                  <ArrowDownToLine size={17} /> {label}
+                </a>
+              )
+            )}
           </div>
-        ) : <a
-          className="btn secondary"
-          href={"/api/studies/" + id + "/export.csv"}
-        >
-          <ArrowDownToLine size={17} />
-          Exportar CSV
-        </a>}
+          {exportBlock && <p id="export-reason" className="small muted">{exportBlock}</p>}
+        </div>
       </div>
       <div className="stats">
         <Stat
