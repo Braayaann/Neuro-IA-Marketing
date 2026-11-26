@@ -1109,7 +1109,14 @@ td .textbtn {
   margin-top: 10px;
 }
 .study-filter { max-width: 16rem; margin-bottom: 1rem; }
-.textbtn.delete-study { display: block; margin-top: 6px; color: var(--danger-text); }
+.delete-study {
+  width: 32px;
+  height: 32px;
+  margin-inline-start: 8px;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
 .btn.danger { background: #91382e; border-color: var(--danger-text); color: white; }
 .btn.danger:hover:not(:disabled) { background: #782b23; }
 .uploadlabel span {
@@ -1724,6 +1731,11 @@ td .textbtn {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+}
+.exhibition:fullscreen > .setup {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .exhibitheader {
   height: 82px;

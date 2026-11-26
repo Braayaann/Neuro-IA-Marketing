@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import {
   ArrowRight,
+  Trash2,
   Camera,
   ImagePlus,
   Monitor,
@@ -92,7 +93,10 @@ function SessionTable({ studies, go, emptyAction, results = false, ownerId, onDe
                   <ArrowRight size={16} />
                 </button>
                 {onDelete && s.owner_id === ownerId && s.status !== "running" && (
-                  <button className="textbtn delete-study" onClick={() => onDelete(s)}>Eliminar sesión</button>
+                  <button className="iconbtn delete-study" aria-label="Eliminar sesión"
+                    title={`Eliminar sesión «${s.name}»`} onClick={() => onDelete(s)}>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
                 )}
               </td>
             </tr>
