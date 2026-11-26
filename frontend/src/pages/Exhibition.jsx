@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { Camera, Check, Play, ShieldCheck, Square, Target } from "lucide-react";
 import { api, post } from "../api";
 import { EMO, REASONS, secs } from "../config";
@@ -31,6 +32,8 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
     startTime = useRef(0),
     inflight = useRef(null),
     display = useRef(),
+    calibrationArea = useRef(),
+    calibratedArea = useRef(null),
     streamRef = useRef(null);
   const targets = [0.12, 0.5, 0.88].flatMap((y) =>
     [0.12, 0.5, 0.88].map((x) => [x, y]),
@@ -96,9 +99,8 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
       track.addEventListener("ended", () => {
         if (streamRef.current !== s) return;
         setCaptureReady(false);
-        setError(
-          "La cámara se desconectó. Detén la sesión y vuelve a conectar.",
-        );
+        setError("La cámara se desconectó. Durante la preparación, reconéctala y repite la calibración.");
+        setPhase((current) => current === "running" ? current : "setup");
         cancel.current = true;
       });
       setDevices(
@@ -121,7 +123,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
     }
   }
   async function frame() {
-    if (!streamRef.current?.active || !video.current?.videoWidth)
+    if (!streamRef.current?.active || streamRef.current.getVideoTracks()[0]?.muted || !video.current?.videoWidth)
       throw new Error("La cámara no está lista.");
     const c = canvas.current,
       v = video.current;
@@ -146,15 +148,24 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
     setError("");
     cancel.current = false;
     try {
-      if (display.current.requestFullscreen && !document.fullscreenElement)
-        await display.current.requestFullscreen();
+      if (display.current.requestFullscreen && !document.fullscreenElement) {
+        // Si el navegador deniega pantalla completa, se usa la misma ventana en ambas fases.
+        await display.current.requestFullscreen().catch(() => {});
+      }
+      if (cancel.current || !alive.current) return;
+      flushSync(() => {
+        setPhase("calibrating");
+        setTarget(0);
+        setCount(0);
+        setSample(null);
+      });
+      const area = calibrationArea.current.getBoundingClientRect();
+      calibratedArea.current = { width: Math.round(area.width), height: Math.round(area.height) };
       await post(`/studies/${id}/calibration/start`, {
-        width: window.innerWidth,
-        height: window.innerHeight,
+        ...calibratedArea.current,
         camera_id: camera,
       });
       setStudy((current) => ({ ...current, status: "calibrating" }));
-      setPhase("calibrating");
       for (let i = 0; i < 9; i++) {
         if (cancel.current || !alive.current) return;
         setTarget(i);
@@ -182,7 +193,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
           );
       }
       const s = await post(`/studies/${id}/calibration/finish`);
-      if (alive.current) {
+      if (alive.current && !cancel.current) {
         setStudy(s);
         setPhase("ready");
         setSample(null);
@@ -203,8 +214,6 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
     setError("");
     setBusy(true);
     try {
-      if (display.current.requestFullscreen && !document.fullscreenElement)
-        await display.current.requestFullscreen();
       const track = streamRef.current?.getVideoTracks()[0];
       if (track?.readyState !== "live" || track.muted)
         throw new Error("Conecta una cámara con señal antes de iniciar.");
@@ -256,6 +265,11 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
   }
   useEffect(() => {
     const visibility = () => {
+      if (document.hidden && phase === "calibrating") {
+        cancel.current = true;
+        setPhase("setup");
+        setError("La calibración se interrumpió al ocultar la pestaña. Vuelve a iniciarla.");
+      }
       if (document.hidden && phase === "running") {
         cancel.current = true;
         setError(
@@ -275,9 +289,20 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
         if (phase === "calibrating" || phase === "ready") setPhase("setup");
       }
     };
+    const windowResize = () => {
+      if (!["ready", "calibrating", "running"].includes(phase) || !calibratedArea.current) return;
+      const header = display.current.querySelector(".exhibitheader").getBoundingClientRect();
+      if (Math.round(header.width) === calibratedArea.current.width &&
+          Math.round(window.innerHeight - header.height) === calibratedArea.current.height) return;
+      cancel.current = true;
+      setError("Cambió el área de exhibición. Repite la calibración o finaliza la sesión en curso.");
+      if (phase !== "running") setPhase("setup");
+    };
+    window.addEventListener("resize", windowResize);
     document.addEventListener("visibilitychange", visibility);
     document.addEventListener("fullscreenchange", resize);
     return () => {
+      window.removeEventListener("resize", windowResize);
       document.removeEventListener("visibilitychange", visibility);
       document.removeEventListener("fullscreenchange", resize);
     };
@@ -330,7 +355,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
         <div>
           <strong>{study.name}</strong>
           <small>
-            Una persona · {study.slots.length} anuncio(s) · Mirada calibrada
+            Una persona · {study.slots.length} anuncio(s)
           </small>
         </div>
         <div className="exhibitactions">
@@ -352,7 +377,7 @@ function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack, themeCon
       </header>
       <ErrorBox message={error} />
       {phase === "calibrating" ? (
-        <div className="calibrationarea">
+        <div className="calibrationarea" ref={calibrationArea}>
           <div className="calibrationnote">
             <Target size={20} />
             <h2>Sigue el punto con la mirada</h2>

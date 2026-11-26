@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {render, screen, cleanup, waitFor, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, cleanup, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {App} from '../App';
 import {AdModal} from '../pages/Ads';
@@ -23,6 +23,7 @@ beforeEach(()=>{
     else if(path==='/auth/login'){state.user=user;data={user,csrf:'new-token'}}
     else if(path==='/ads'&&options.method==='POST'){data={id:9,...JSON.parse(options.body)};state.ads.push(data)}
     else if(path==='/ads')data=state.ads;
+    else if(path==='/studies/15/calibration/start')data={ok:true};
     else if(path==='/studies'&&options.method==='POST')data={id:15,...JSON.parse(options.body)};
     else if(path==='/studies')data=state.studies;
     else if(path==='/studies/15' && options.method==='DELETE'){
@@ -45,6 +46,30 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
 describe('Flujos principales del frontend',()=>{
+  it('calibra contra el área visible y vuelve a preparación si se pierde la cámara',async()=>{
+    state.user=user;
+    state.studies=[{id:15,name:'Prueba',status:'draft',slots:[{id:1,position:0}]}];
+    location.hash='exhibit/15';
+    const track=Object.assign(new EventTarget(),{readyState:'live',getSettings:()=>({}),stop:vi.fn()});
+    const stream={active:true,getVideoTracks:()=>[track],getTracks:()=>[track]};
+    Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
+      getUserMedia:async()=>stream, enumerateDevices:async()=>[]
+    }});
+    vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockReturnValue({width:1084,height:427});
+    try {
+      const {container}=render(<App/>);
+      await userEvent.click(await screen.findByRole('button',{name:'Conectar cámara'}));
+      fireEvent.loadedData(container.querySelector('.capturevideo'));
+      await userEvent.click(screen.getByRole('button',{name:/Calibrar mirada/}));
+      await waitFor(()=>expect(requests.some(r=>r.path.endsWith('/calibration/start'))).toBe(true));
+      expect(JSON.parse(requests.find(r=>r.path.endsWith('/calibration/start')).options.body)).toMatchObject({
+        width:1084,height:427
+      });
+      act(()=>track.dispatchEvent(new Event('ended')));
+      expect(screen.getByRole('button',{name:'Reconectar cámara'})).toBeTruthy();
+      expect(screen.getByRole('button',{name:'Iniciar exhibición'}).disabled).toBe(true);
+    } finally {delete navigator.mediaDevices;}
+  });
   it('mantiene el tema elegido al entrar, navegar y volver a abrir el portal', async()=>{
     const u=userEvent.setup();
     localStorage.removeItem('neuroia.theme');

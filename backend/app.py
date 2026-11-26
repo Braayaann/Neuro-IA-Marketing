@@ -444,7 +444,7 @@ def create_app(config=None):
     @auth
     def calibration_finish(sid):
         import numpy as np
-        from mirada.calibracion import Calibracion
+        from mirada.calibracion import Calibracion, OBJETIVOS
         s = get_study(sid, lock=True, write=True)
         c = s.calibration
         if s.status != 'calibrating' or not c:
@@ -456,6 +456,19 @@ def create_app(config=None):
                 [np.median(c.samples[str(i)], axis=0) for i in range(9)])
         except ValueError as e:
             problem(str(e))
+        # Evalúa cada dirección dejando fuera, por turno, el punto que se predice.
+        # Una calibración útil debe predecir mejor que mirar siempre al centro.
+        targets = np.asarray(OBJETIVOS)
+        design = np.column_stack((np.ones(len(targets)), (fit.muestras - fit.media) / fit.escala))
+        predictions = []
+        for index, row in enumerate(design):
+            keep = np.arange(len(targets)) != index
+            coeff, _, rank, _ = np.linalg.lstsq(design[keep], targets[keep], rcond=None)
+            if rank < 3:
+                problem('Falta señal consistente en ambas direcciones. Repite la calibración.')
+            predictions.append(row @ coeff)
+        if np.any(np.mean((predictions - targets) ** 2, axis=0) >= np.var(targets, axis=0)):
+            problem('La mirada no siguió los puntos de forma consistente. Repite la calibración siguiendo cada punto con los ojos.')
         c.mean, c.scale, c.coefficients = fit.media.tolist(), fit.escala.tolist(), fit.coeficientes.tolist()
         c.completed_at = utcnow()
         s.status = 'ready'

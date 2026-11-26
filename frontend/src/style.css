@@ -1731,7 +1731,9 @@ td .textbtn {
   display: flex;
   flex-direction: column;
 }
-.exhibition:fullscreen {
+.exhibition:fullscreen,
+.exhibition:has(> .calibrationarea),
+.exhibition:has(> .exhibitstage) {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;

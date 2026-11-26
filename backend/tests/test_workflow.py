@@ -45,6 +45,20 @@ def test_auth_csrf_and_roles(client):
     assert client.post('/api/ads',json={'title':'<script>texto</script>'},headers=h).status_code==201
 
 
+def test_calibration_rejects_inconsistent_vertical_signal(app, client):
+    from mirada.calibracion import OBJETIVOS
+    headers = login(client)
+    sid = make_study(client, headers)['id']
+    path = f'/api/studies/{sid}/calibration'
+    assert client.post(path+'/start', headers=headers,json={'width':1100,'height':540}).status_code == 200
+    with app.app_context():
+        db.session.get(Calibration,sid).samples = {
+            str(i): [[x, .12 + .38*((i//3 + i%3) % 3)]] * 10 for i,(x,_) in enumerate(OBJETIVOS)}
+        db.session.commit()
+    assert client.post(path+'/finish', headers=headers).status_code == 400
+    assert client.post(f'/api/studies/{sid}/start', headers=headers).status_code == 409
+
+
 def test_ownership_and_snapshots(app,client):
     h=login(client)
     s=make_study(client,h)
