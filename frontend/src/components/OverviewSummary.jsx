@@ -13,13 +13,14 @@ function mostFrequent(entries) {
 export function OverviewSummary({ ads }) {
   const sorted = [...ads].sort((a, b) => b.seconds - a.seconds);
   const maximum = sorted[0]?.seconds || 0;
-  const leaders = sorted.filter((ad) => ad.seconds === maximum);
+  const measured = sorted.filter((ad) => ad.samples > 0);
+  const leaders = measured.filter((ad) => ad.seconds === maximum);
   const total = ads.reduce((sum, ad) => sum + ad.seconds, 0);
   return (
     <section className="panel" aria-label="Resumen de todos los anuncios">
       <h2>Resumen de todos los anuncios</h2>
       <p className="quadrant-summary">
-        {maximum > 0
+        {maximum > 0 && measured.length > 1
           ? leaders.length === 1
             ? `${leaders[0].title} acumuló el mayor tiempo estimado de mirada: ${secs(maximum)} (${((maximum / total) * 100).toFixed(1)} % del tiempo registrado en anuncios).`
             : `${leaders.map((ad) => ad.title).join(", ")} compartieron el mayor tiempo estimado de mirada, con ${secs(maximum)} cada uno.`
@@ -39,7 +40,7 @@ export function OverviewSummary({ ads }) {
             {sorted.map((ad) => (
               <tr key={ad.id}>
                 <th scope="row">{ad.title}</th>
-                <td>{secs(ad.seconds)}</td>
+                <td>{ad.samples ? secs(ad.seconds) : "Sin muestras válidas"}</td>
                 <td>
                   {mostFrequent(
                     (ad.quadrants || []).map((zone) => ({

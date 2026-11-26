@@ -539,10 +539,10 @@ def create_app(config=None):
         zones = quadrant_times(observations, s.slots, s.columns)
         ads = []
         for a in s.slots:
-            rows = [o for o in observations if o.study_ad_id == a.id]
+            rows = [o for o in observations if o.study_ad_id == a.id and o.valid]
             seconds = sum(o.estimated_seconds for o in rows)
             ads.append(dict(**a.public(), seconds=round(seconds, 2), samples=len(rows),
-                            points=[dict(x=o.x, y=o.y) for o in rows if o.valid],
+                            points=[dict(x=o.x, y=o.y) for o in rows],
                             quadrant_seconds=round(sum(zones[a.id]), 2),
                             quadrants=[dict(key=key, label=label, seconds=round(duration, 2))
                                        for (key, label), duration in zip(QUADRANTS, zones[a.id])],
@@ -568,6 +568,8 @@ def create_app(config=None):
     @auth
     def export(sid):
         s = get_study(sid)
+        if s.export_block_reason:
+            problem(s.export_block_reason, 409)
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         writer.writerow(['secuencia', 'segundos_desde_inicio', 'anuncio_id', 'x_normalizada', 'y_normalizada', 'valida', 'motivo', 'expresion', 'confianza', 'segundos_estimados'])

@@ -82,8 +82,22 @@ def test_full_session_and_interval_accounting(app,client):
     assert result['ads'][0]['seconds']==1.5
     assert result['ads'][1]['seconds']==0
     assert result['emotions']=={'Alegria':7}
-    assert client.get(f'/api/studies/{sid}/export.csv').status_code==200
+    download = client.get(f'/api/studies/{sid}/export.csv')
+    assert download.status_code == 200 and download.mimetype == 'text/csv'
+    assert len(download.data.decode('utf-8-sig').splitlines()) == 1 + result['total_samples']
     assert client.post(f'/api/studies/{sid}/observations',data={},headers=h).status_code==409
+
+
+def test_cancelled_export_is_blocked_on_direct_request(client):
+    headers = login(client)
+    study = make_study(client, headers)
+    path = f"/api/studies/{study['id']}"
+    cancelled = client.post(path + '/stop', headers=headers).json
+    assert cancelled['status'] == 'cancelled'
+    response = client.get(path + '/export.csv')
+    assert response.status_code == 409
+    assert response.json['error'] == cancelled['export_block_reason'] == 'Las sesiones canceladas no se pueden exportar'
+    assert 'Content-Disposition' not in response.headers
 
 
 def test_delete_study_protects_owner_and_running_capture(app, client):

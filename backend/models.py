@@ -65,6 +65,12 @@ class Study(db.Model):
     def columns(self):
         return self.layout_columns or min(len(self.slots), 2) or 1
 
+    @property
+    def export_block_reason(self):
+        if self.status == 'cancelled':
+            return 'Las sesiones canceladas no se pueden exportar'
+        return None
+
     def public(self):
         return dict(id=self.id, owner_id=self.owner_id, layout_columns=self.columns, name=self.name, status=self.status, with_emotions=self.with_emotions,
                     created_at=self.created_at.isoformat(),
@@ -72,6 +78,7 @@ class Study(db.Model):
                     ended_at=self.ended_at.isoformat() if self.ended_at else None,
                     slots=[a.public() for a in self.slots],
                     calibrated=bool(self.calibration and self.calibration.coefficients),
+                    export_block_reason=self.export_block_reason,
                     camera_id=self.camera_id, screen_width=self.screen_width, screen_height=self.screen_height)
 
 

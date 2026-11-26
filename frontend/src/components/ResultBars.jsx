@@ -6,18 +6,17 @@ export function ResultBars({ label, items, unit }) {
   const maximum = Math.max(0, ...items.map((item) => item.value));
   return (
     <figure className="result-bars" aria-label={label}>
-      <figcaption>
+      {items.some((item) => item.value != null) ? <figcaption>
         Escala desde 0{maximum > 0 ? ` hasta ${number.format(maximum)}` : ""}{" "}
         {unit}
-      </figcaption>
-      {!maximum && <p className="small muted">Sin datos suficientes</p>}
+      </figcaption> : <p className="small muted">Sin datos suficientes</p>}
       <ul>
         {items.map((item) => (
           <li key={item.key}>
             <div className="result-bar-label">
               <span>{item.label}</span>
               <strong>
-                {number.format(item.value)} {unit}
+                {item.value == null ? "Sin muestras válidas" : `${number.format(item.value)} ${unit}`}
               </strong>
             </div>
             <div className="result-bar-track" aria-hidden="true">
@@ -39,6 +38,10 @@ export function QuadrantSummary({ ad }) {
   const quadrants = ad.quadrants || [];
   const largest = Math.max(0, ...quadrants.map((zone) => zone.seconds));
   const leaders = quadrants.filter((zone) => zone.seconds === largest);
+  if (!ad.samples) return null;
+  if (!ad.seconds) return (
+    <p>Hay muestras válidas con 0 segundos estimados. Ningún intervalo acumuló tiempo para este anuncio.</p>
+  );
   return (
     <>
       <p className="small">

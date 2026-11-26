@@ -29,4 +29,5 @@ export const fmtDate = (s) =>
     month: "short",
     year: "numeric",
   });
-export const secs = (n) => `${Number(n || 0).toFixed(1)} s`;
+const secondsFormat = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
+export const secs = (n) => `${secondsFormat.format(n || 0)} s`;

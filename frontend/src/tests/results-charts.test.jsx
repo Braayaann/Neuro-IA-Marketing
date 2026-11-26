@@ -23,6 +23,7 @@ function results(valid = true) {
     id: position + 1,
     position,
     title: `Anuncio ${position + 1}`,
+    samples: valid ? 1 : 0,
     seconds: valid ? 10 + position : 0,
     quadrant_seconds: valid ? 8 : 0,
     quadrants: labels.map((label, index) => ({
@@ -118,4 +119,37 @@ it("comunica ausencia de datos en una sesión con todas las muestras inválidas"
   expect(screen.getAllByText("Sin datos suficientes")).toHaveLength(3);
   expect(screen.queryByText(/reunió el/)).toBeNull();
   expect(container.textContent).not.toMatch(/NaN|Infinity/);
+});
+
+it("distingue muestras válidas con cero segundos y anuncios sin muestras", async () => {
+  const data = results(false);
+  data.ads[0].samples = 1;
+  data.ads[0].points = [{ x: .2, y: .2 }];
+  data.valid_samples = 1;
+  data.valid_ratio = 20;
+  api.mockResolvedValue(data);
+  render(<Results id={9} go={vi.fn()} />);
+  const selector = await screen.findByLabelText("Vista del mapa");
+  expect(screen.getByText("1 de 5 muestras válidas")).toBeTruthy();
+  const bars = within(screen.getByRole("figure", {name:"Comparación de anuncios en segundos"}));
+  expect(bars.getByText("0 s")).toBeTruthy();
+  expect(bars.getAllByText("Sin muestras válidas")).toHaveLength(2);
+  expect(bars.queryByText("Sin datos suficientes")).toBeNull();
+  expect(screen.queryByText(/acumuló el mayor tiempo|compartieron el mayor tiempo/)).toBeNull();
+  await userEvent.selectOptions(selector, "1");
+  expect(screen.getByText(/Hay muestras válidas con 0 segundos estimados/)).toBeTruthy();
+  expect(screen.getByRole("link",{name:"Exportar CSV"}).getAttribute("href")).toBe("/api/studies/9/export.csv");
+});
+
+it("explica el bloqueo de exportación en una sesión cancelada", async () => {
+  const data = results(false);
+  data.study.status = "cancelled";
+  data.study.export_block_reason = "Las sesiones canceladas no se pueden exportar";
+  data.total_samples = 0;
+  api.mockResolvedValue(data);
+  render(<Results id={2} go={vi.fn()} />);
+  expect((await screen.findByRole("button", {name:"Exportar CSV"})).disabled).toBe(true);
+  expect(screen.queryByRole("link",{name:"Exportar CSV"})).toBeNull();
+  expect(screen.getByText(data.study.export_block_reason)).toBeTruthy();
+  expect(screen.getByText("0 de 0 muestras válidas")).toBeTruthy();
 });

@@ -33,6 +33,7 @@ function Results({ id, go }) {
   if (!data) return <p>Cargando resultados…</p>;
   const columns = studyColumns(data.study);
   const selected = data.ads.find((ad) => String(ad.id) === selectedAd);
+  const exportBlock = data.study.export_block_reason;
   return (
     <>
       <div className="resultbar">
@@ -44,32 +45,39 @@ function Results({ id, go }) {
           <h2>{data.study.name}</h2>
           <Badge status={data.study.status} />
         </div>
-        <a
+        {exportBlock ? (
+          <div>
+            <button className="btn secondary" disabled aria-describedby="export-reason">
+              <ArrowDownToLine size={17} /> Exportar CSV
+            </button>
+            <p id="export-reason" className="small muted">{exportBlock}</p>
+          </div>
+        ) : <a
           className="btn secondary"
           href={"/api/studies/" + id + "/export.csv"}
         >
           <ArrowDownToLine size={17} />
           Exportar CSV
-        </a>
+        </a>}
       </div>
       <div className="stats">
         <Stat
           title="TIEMPO ESTIMADO VÁLIDO"
-          value={secs(data.estimated_seconds)}
+          value={data.valid_samples ? secs(data.estimated_seconds) : "Sin muestras válidas"}
           icon={Eye}
           detail="Intervalos consecutivos por anuncio"
         />
         <Stat
-          title="MUESTRAS VÁLIDAS"
-          value={data.valid_samples}
+          title="MUESTRAS REGISTRADAS"
+          value={data.total_samples}
           icon={Target}
-          detail={`De ${data.total_samples} muestras registradas`}
+          detail="Fotogramas analizados durante la exhibición"
         />
         <Stat
           title="COBERTURA DE MUESTRAS"
           value={data.valid_ratio + "%"}
           icon={ScanFace}
-          detail="Muestras asignadas a un anuncio"
+          detail={`${data.valid_samples} de ${data.total_samples} muestras válidas`}
         />
       </div>
       {!data.total_samples ? (
@@ -89,7 +97,7 @@ function Results({ id, go }) {
               items={data.ads.map((ad) => ({
                 key: ad.id,
                 label: ad.title,
-                value: ad.seconds,
+                value: ad.samples ? ad.seconds : null,
               }))}
             />
           </section>
@@ -172,7 +180,7 @@ function Results({ id, go }) {
                   items={(selected.quadrants || []).map((zone) => ({
                     key: zone.key,
                     label: zone.label,
-                    value: zone.seconds,
+                    value: selected.samples ? zone.seconds : null,
                   }))}
                 />
                 <QuadrantSummary ad={selected} />
