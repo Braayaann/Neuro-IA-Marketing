@@ -31,10 +31,10 @@ def test_session_pdf(app, client, tmp_path, samples):
         s.layout_columns = 2 if samples else 3
         if samples:
             for seq, (idx, x, y, seconds) in enumerate([
-                    (0, .31, .11, 0), (0, .33, .12, .75), (1, .7, .17, 0)]):
+                    (0, .31, .11, 0), (0, .33, .12, .75), (1, .7, .17, 0), (0, .31, .11, 0)]):
                 db.session.add(Observation(study_id=sid, study_ad_id=s.slots[idx].id,
                                            seq=seq, elapsed=seq*.75, valid=True, x=x, y=y,
-                                           emotion='Alegria', estimated_seconds=seconds))
+                                           emotion='Neutral' if seq == 3 else 'Alegria', estimated_seconds=seconds))
         db.session.commit()
     base = f'/api/studies/{sid}'
     result = client.get(base + '/results').json
@@ -52,7 +52,8 @@ def test_session_pdf(app, client, tmp_path, samples):
     if samples:
         assert result['ads'][0]['quadrant_seconds'] == result['ads'][0]['seconds'] == .75
         assert 'Se atribuyeron 0,75 de 0,75 segundos' in details[0]
-        assert 'Alegría (2)' in details[0]
+        chart = details[0].split('Número de muestras por expresión')[1].split()
+        assert chart == ['Alegría', '2', 'Neutral', '1']
         assert '0 segundos estimados' in details[1] and 'Sin muestras válidas' in details[2]
         assert 'Colección mar reunió el mayor' in summary and 'Vacío' in summary
     else:

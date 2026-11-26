@@ -171,8 +171,21 @@ def ad_page(pdf, study, ad, uploads):
         paragraph(pdf, 'Sin expresiones registradas para este anuncio.', y - 6)
     else:
         counts = sorted(ad['emotions'].items(), key=lambda item: -item[1])
-        entries = [f'{"Alegría" if name == "Alegria" else name} ({count})' for name, count in counts]
-        paragraph(pdf, 'Frecuencia en muestras: ' + ' · '.join(entries), y - 6)
+        y = paragraph(pdf, 'Número de muestras por expresión', y - 6, 10, color=MUTED) - 8
+        bar_x = MARGIN + 82
+        bar_width = CONTENT - 130
+        row_height = min(19, (y - 48) / len(counts))
+        maximum = counts[0][1]
+        pdf.setFont('Helvetica', 10)
+        for name, frequency in counts:
+            pdf.setFillColor(INK)
+            pdf.drawString(MARGIN, y - 9, 'Alegría' if name == 'Alegria' else name)
+            pdf.drawRightString(WIDTH - MARGIN, y - 9, str(frequency))
+            pdf.setFillColor(PALE)
+            pdf.rect(bar_x, y - 9, bar_width, 7, stroke=0, fill=1)
+            pdf.setFillColor(GREEN)
+            pdf.rect(bar_x, y - 9, bar_width * frequency / maximum, 7, stroke=0, fill=1)
+            y -= row_height
 
 
 def session_pdf(data, uploads):
