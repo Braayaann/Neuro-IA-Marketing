@@ -15,7 +15,7 @@ from uuid import uuid4
 import click
 from dotenv import load_dotenv
 from flask import Flask, abort, g, jsonify, request, send_file, send_from_directory, session
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.exceptions import HTTPException
@@ -26,6 +26,7 @@ from .metrics import QUADRANTS, cell_position, quadrant_times
 from .vision import Vision
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_IMAGE_BYTES = 6 * 1024 * 1024
 load_dotenv(ROOT / '.env')
 
 
@@ -46,7 +47,7 @@ def create_app(config=None):
         SECRET_KEY=secret,
         SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 'postgresql+psycopg://neuro:neuro@127.0.0.1:55432/neuroia'),
         SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True, 'connect_args': {'connect_timeout': 5}},
-        MAX_CONTENT_LENGTH=6*1024*1024,
+        MAX_CONTENT_LENGTH=MAX_IMAGE_BYTES + 64 * 1024,  # Incluye la cabecera multipart.
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=os.getenv('APP_ENV') == 'production',
         PERMANENT_SESSION_LIFETIME=28800,
@@ -127,6 +128,8 @@ def create_app(config=None):
     @app.errorhandler(HTTPException)
     def http_error(error):
         if request.path.startswith('/api/'):
+            if error.code == 413 and request.path.startswith('/api/ads'):
+                return jsonify(error='La imagen supera el límite de 6 MB.'), 413
             return jsonify(error=error.description), error.code
         return error
 
@@ -231,20 +234,51 @@ def create_app(config=None):
     @app.route('/api/ads/<int:aid>', methods=['PATCH'])
     @auth
     def save_ad(aid=None):
-        data = payload()
         ad = db.get_or_404(Ad, aid) if aid else Ad(owner_id=g.user.id)
         if ad.owner_id != g.user.id:
             abort(403)
+        multipart = request.mimetype == 'multipart/form-data'
+        data = request.form if multipart else payload()
         ad.title = string(data, 'title', 140)
         ad.description = string(data, 'description', 500, False)
         color = data.get('color', '#c7f36b')
         active = data.get('active', True)
+        if multipart and active in ('true', 'false'):
+            active = active == 'true'
         if not isinstance(color, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', color) or type(active) is not bool:
             problem('Color o estado inválido.')
         ad.color, ad.active = color, active
+        if multipart:
+            ad.image = store_image()
         db.session.add(ad)
         db.session.commit()
         return jsonify(ad.public()), 200 if aid else 201
+
+    def store_image():
+        f = request.files.get('image')
+        if not f:
+            problem('Selecciona una imagen.')
+        f.stream.seek(0, os.SEEK_END)
+        if f.stream.tell() > MAX_IMAGE_BYTES:
+            problem('La imagen supera el límite de 6 MB.', 413)
+        f.stream.seek(0)
+        try:
+            with Image.open(f.stream) as image:
+                if image.format not in ('JPEG', 'PNG', 'WEBP'):
+                    problem('Formato incompatible. Usa JPG, PNG o WEBP.')
+                if image.width * image.height > 20_000_000:
+                    problem('La imagen supera el límite de 20 megapíxeles.')
+                image = ImageOps.exif_transpose(image).convert('RGBA')
+                image.thumbnail((1920, 1920))
+                background = Image.new('RGB', image.size, 'black')
+                background.paste(image, mask=image.getchannel('A'))
+        except Image.DecompressionBombError:
+            problem('La imagen supera el límite de 20 megapíxeles.')
+        except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+            problem('Imagen dañada o incompatible. Usa JPG, PNG o WEBP.')
+        filename = uuid4().hex + '.jpg'
+        background.save(Path(app.config['UPLOAD_DIR']) / filename, 'JPEG', quality=90)
+        return filename
 
     @app.post('/api/ads/<int:aid>/image')
     @auth
@@ -252,20 +286,7 @@ def create_app(config=None):
         ad = db.get_or_404(Ad, aid)
         if ad.owner_id != g.user.id:
             abort(403)
-        f = request.files.get('image')
-        if not f:
-            problem('Selecciona una imagen.')
-        try:
-            with Image.open(f.stream) as image:
-                if image.format not in ('JPEG', 'PNG', 'WEBP') or image.width*image.height > 20000000:
-                    problem('Usa JPG, PNG o WEBP de hasta 20 megapíxeles.')
-                image = image.convert('RGB')
-                image.thumbnail((1920, 1920))
-                filename = uuid4().hex + '.jpg'
-                image.save(Path(app.config['UPLOAD_DIR']) / filename, 'JPEG', quality=90)
-        except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
-            problem('Archivo de imagen inválido.')
-        ad.image = filename
+        ad.image = store_image()
         db.session.commit()
         return jsonify(ad.public())
 
@@ -288,29 +309,49 @@ def create_app(config=None):
             q = q.where(Study.owner_id == g.user.id)
         return jsonify([s.public() for s in db.session.scalars(q).unique()])
 
-    @app.post('/api/studies')
-    @auth
-    def create_study():
-        data = payload()
-        ids = data.get('ad_ids')
+    def selected_ads(ids):
         if not isinstance(ids, list) or not 1 <= len(ids) <= 4 or any(type(i) is not int for i in ids) or len(set(ids)) != len(ids):
             problem('Selecciona de uno a cuatro anuncios diferentes.')
         selected = list(db.session.scalars(select(Ad).where(Ad.id.in_(ids), Ad.owner_id == g.user.id, Ad.active.is_(True))))
         if len(selected) != len(ids):
             problem('Uno de los anuncios no está disponible.', 403)
+        by_id = {ad.id: ad for ad in selected}
+        return [by_id[aid] for aid in ids]
+
+    def save_slots(study, ads):
+        study.layout_columns = len(ads) if len(ads) <= 3 else 2
+        for position, ad in enumerate(ads):
+            db.session.add(StudyAd(study_id=study.id, ad_id=ad.id, position=position, title=ad.title,
+                                   description=ad.description, color=ad.color, image=ad.image))
+
+    @app.post('/api/studies')
+    @auth
+    def create_study():
+        data = payload()
+        ads = selected_ads(data.get('ad_ids'))
         emotions = data.get('with_emotions', True)
         if type(emotions) is not bool:
             problem('Modo de expresiones inválido.')
-        s = Study(owner_id=g.user.id, name=string(data, 'name', 140), with_emotions=emotions,
-                  layout_columns=len(ids) if len(ids) <= 3 else 2)
+        s = Study(owner_id=g.user.id, name=string(data, 'name', 140), with_emotions=emotions)
         db.session.add(s)
         db.session.flush()
-        for position, aid in enumerate(ids):
-            a = next(a for a in selected if a.id == aid)
-            db.session.add(StudyAd(study_id=s.id, ad_id=a.id, position=position, title=a.title,
-                                   description=a.description, color=a.color, image=a.image))
+        save_slots(s, ads)
         db.session.commit()
         return jsonify(s.public()), 201
+
+    @app.patch('/api/studies/<int:sid>/ads')
+    @auth
+    def update_study_ads(sid):
+        s = get_study(sid, lock=True, write=True)
+        if s.status != 'draft':
+            problem('Solo se pueden cambiar los anuncios antes de calibrar.', 409)
+        ads = selected_ads(payload().get('ad_ids'))
+        for slot in s.slots:
+            db.session.delete(slot)
+        db.session.flush()
+        save_slots(s, ads)
+        db.session.commit()
+        return jsonify(s.public())
 
     @app.get('/api/studies/<int:sid>')
     @auth

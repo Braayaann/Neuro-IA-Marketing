@@ -117,7 +117,7 @@ function AdVisual({ ad, mini = false }) {
   return (
     <div
       className={"advisual " + (mini ? "mini" : "")}
-      style={{ background: ad.color || "#c7f36b" }}
+      style={{ background: ad.image_url ? "#000" : ad.color || "#c7f36b" }}
     >
       {ad.image_url ? (
         <img src={ad.image_url} alt={ad.title} />

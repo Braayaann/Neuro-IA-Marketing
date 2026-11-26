@@ -1,6 +1,7 @@
 import io
 import pytest
 from datetime import timedelta
+from PIL import Image
 from sqlalchemy import select
 from backend.models import Study, Observation, User, db, utcnow
 from conftest import login, make_study, FakeVision, calibrate, jpeg
@@ -115,3 +116,58 @@ def test_upload_private_media_and_invalid_input(app,client):
     other=app.test_client();login(other,'other@test.cl')
     assert other.get(url).status_code==403
     assert client.post('/api/studies',json={'name':'n','ad_ids':[ad,ad]},headers=h).status_code==400
+
+
+def test_ad_image_and_metadata_are_saved_together(client):
+    headers = login(client)
+    png = io.BytesIO()
+    Image.new('RGBA', (48, 96), (255, 0, 0, 0)).save(png, 'PNG')
+    png.seek(0)
+    saved = client.post('/api/ads', headers=headers, data={
+        'title': 'Original', 'active': 'true', 'image': (png, 'vertical.png')})
+    assert saved.status_code == 201
+    ad = saved.json
+    with Image.open(io.BytesIO(client.get(ad['image_url']).data)) as displayed:
+        assert displayed.size == (48, 96)
+        assert displayed.getpixel((0, 0)) == (0, 0, 0)
+    gif = io.BytesIO()
+    Image.new('RGB', (1, 1)).save(gif, 'GIF')
+    gif.seek(0)
+    for invalid, code in [(io.BytesIO(b'damaged'), 400), (gif, 400),
+                          (io.BytesIO(bytes(6 * 1024 * 1024 + 1)), 413)]:
+        response = client.patch(f"/api/ads/{ad['id']}", headers=headers, data={
+            'title': 'Intento de cambio', 'image': (invalid, 'reemplazo.jpg')})
+        assert response.status_code == code
+        assert client.get('/api/ads').json == [ad]
+    changed = client.patch(f"/api/ads/{ad['id']}", headers=headers, data={
+        'title': 'Nueva imagen', 'image': (jpeg(), 'nueva.jpg')})
+    assert changed.status_code == 200
+    assert changed.json['image_url'] != ad['image_url']
+
+
+def test_edit_ads_before_calibration_keeps_study_and_history(app, client):
+    headers = login(client)
+    study = make_study(client, headers)
+    first, second = [slot['ad_id'] for slot in study['slots']]
+    history = client.post('/api/studies', headers=headers,
+                          json={'name': 'Otra sesión', 'ad_ids': [first]}).json
+    third = client.post('/api/ads', headers=headers, json={'title': 'Tercero'}).json['id']
+    client.patch(f'/api/ads/{first}', headers=headers,
+                 data={'title': 'Actualizado', 'image': (jpeg(), 'foto.jpg')})
+    path = f"/api/studies/{study['id']}"
+    other = app.test_client()
+    assert other.patch(path + '/ads', headers=login(other, 'other@test.cl'),
+                       json={'ad_ids': [first]}).status_code == 403
+    for invalid in [[], [first, first], [third, 99999]]:
+        assert client.patch(path + '/ads', headers=headers, json={'ad_ids': invalid}).status_code >= 400
+        assert client.get(path).json['slots'] == study['slots']
+    order = [second, third, first]
+    updated = client.patch(path + '/ads', headers=headers, json={'ad_ids': order}).json
+    assert updated['id'] == study['id'] and updated['layout_columns'] == 3
+    assert [slot['ad_id'] for slot in updated['slots']] == order
+    assert updated['slots'][2]['title'] == 'Actualizado' and updated['slots'][2]['image_url']
+    assert client.get(f"/api/studies/{history['id']}").json['slots'] == history['slots']
+    assert client.post(path + '/calibration/start', headers=headers,
+                       json={'width': 1200, 'height': 800}).status_code == 200
+    assert client.patch(path + '/ads', headers=headers, json={'ad_ids': [third]}).status_code == 409
+    assert client.get(path).json['slots'] == updated['slots']

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowRight,
   ImagePlus,
@@ -6,7 +6,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { api, post } from "../api";
+import { api } from "../api";
 import { AdVisual, Button, Modal, Empty, ErrorBox } from "../components/ui";
 
 function Ads({ ads, edit, create }) {
@@ -103,33 +103,61 @@ function Ads({ ads, edit, create }) {
 }
 
 function AdModal({ ad, onClose, saved }) {
-  const savedId = useRef(ad?.id);
+  const fileInput = useRef(null);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
+    [file, setFile] = useState(null),
+    [preview, setPreview] = useState(null),
     [color, setColor] = useState(ad?.color || "#c7f36b");
+  useEffect(() => {
+    if (!file) return;
+    let message;
+    if (file.size > 6 * 1024 * 1024) message = "La imagen supera el límite de 6 MB.";
+    else if (file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type))
+      message = "Formato incompatible. Usa JPG, PNG o WEBP.";
+    if (message) {
+      setPreview({ file, error: message });
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      if (image.naturalWidth * image.naturalHeight > 20_000_000)
+        setPreview({ file, error: "La imagen supera el límite de 20 megapíxeles." });
+      else setPreview({ file, url });
+    };
+    image.onerror = () => setPreview({ file, error: "Imagen dañada o incompatible. Elige otro archivo." });
+    image.src = url;
+    return () => {
+      image.onload = image.onerror = null;
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+  const checked = file && preview?.file === file ? preview : null;
+  const previewUrl = checked?.url || ad?.image_url;
   async function submit(e) {
     e.preventDefault();
+    if (busy || (file && !checked?.url)) return;
     setBusy(true);
     setError("");
     const f = new FormData(e.currentTarget);
     try {
-      const a = await api("/ads" + (savedId.current ? "/" + savedId.current : ""), {
-        method: savedId.current ? "PATCH" : "POST",
-        body: {
-          title: f.get("title"),
-          description: f.get("description"),
-          color,
-          active: f.get("active") === "on",
-        },
-      });
-      savedId.current = a.id;
-      const image = f.get("image");
-      if (image?.size) {
-        const upload = new FormData();
-        upload.append("image", image);
-        await post("/ads/" + a.id + "/image", upload);
+      const fields = {
+        title: f.get("title"),
+        description: f.get("description"),
+        color,
+        active: f.get("active") === "on",
+      };
+      let body = fields;
+      if (file) {
+        body = new FormData();
+        for (const [key, value] of Object.entries(fields)) body.append(key, value);
+        body.append("image", file);
       }
-      await saved();
+      const result = await api(ad ? "/ads/" + ad.id : "/ads", {
+        method: ad ? "PATCH" : "POST", body,
+      });
+      await saved(result);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -185,13 +213,34 @@ function AdModal({ ad, onClose, saved }) {
           <strong>
             {ad?.image_url ? "Reemplazar imagen" : "Añadir una imagen"}
           </strong>
-          <span>JPG, PNG o WEBP · Hasta 6 MB</span>
+          <span>JPG, PNG o WEBP · Hasta 6 MB y 20 megapíxeles</span>
           <input
             name="image"
             type="file"
+            ref={fileInput}
             accept="image/jpeg,image/png,image/webp"
+            disabled={busy}
+            onChange={(e) => {
+              setError("");
+              setPreview(null);
+              setFile(e.target.files[0] || null);
+            }}
           />
         </label>
+        {file && (
+          <div className="file-choice">
+            <span aria-live="polite">{file.name}{!checked && " · Comprobando imagen…"}</span>
+            <button type="button" className="textbtn" disabled={busy} onClick={() => {
+              fileInput.current.value = "";
+              setFile(null);
+              setPreview(null);
+              setError("");
+            }}>Descartar archivo</button>
+          </div>
+        )}
+        {previewUrl && <img className="ad-file-preview" src={previewUrl}
+          alt={checked?.url ? "Vista previa de la imagen seleccionada" : "Imagen actual del anuncio"} />}
+        <ErrorBox message={checked?.error} />
         <p className="small muted">
           Si no añades imagen, se mostrará una composición con tu texto y color.
         </p>
@@ -200,7 +249,7 @@ function AdModal({ ad, onClose, saved }) {
           <Button type="button" className="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button disabled={busy}>
+          <Button disabled={busy || Boolean(file && !checked?.url)}>
             {busy ? "Guardando…" : "Guardar anuncio"}
           </Button>
         </div>

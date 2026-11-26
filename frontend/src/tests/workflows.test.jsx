@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {render, screen, cleanup, waitFor} from '@testing-library/react';
+import {render, screen, cleanup, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {App} from '../App';
 import {AdModal} from '../pages/Ads';
@@ -25,12 +25,20 @@ beforeEach(()=>{
     else if(path==='/ads')data=state.ads;
     else if(path==='/studies'&&options.method==='POST')data={id:15,...JSON.parse(options.body)};
     else if(path==='/studies')data=state.studies;
+    else if(path==='/studies/15')data=state.studies[0];
+    else if(path==='/vision/status')data={enabled:true,mediapipe:true};
+    else if(path==='/studies/15/ads' && options.method==='PATCH'){
+      const {ad_ids}=JSON.parse(options.body);
+      data={...state.studies[0],slots:ad_ids.map((id,position)=>({
+        ...state.ads.find(ad=>ad.id===id),ad_id:id,position
+      }))};
+    }
     else if(path.endsWith('/results'))data={study:{name:'Sin observaciones',slots:[],status:'completed'},ads:[],total_samples:0,valid_samples:0,valid_ratio:0,estimated_seconds:0,warning:'Estimación'};
     else throw new Error('Solicitud inesperada: '+path);
     return {ok:true,json:async()=>data};
   });
 });
-afterEach(()=>{cleanup();vi.restoreAllMocks()});
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals()});
 
 describe('Flujos principales del frontend',()=>{
   it('permite ingresar y muestra el espacio del dueño sin cuentas de administrador',async()=>{
@@ -65,6 +73,59 @@ describe('Flujos principales del frontend',()=>{
     await waitFor(()=>expect(created).toHaveBeenCalledOnce());
     expect(created.mock.calls[0][0].ad_ids).toEqual([2,1]);
     expect(created.mock.calls[0][0].with_emotions).toBe(false);
+  });
+
+  it('muestra el archivo antes del guardado y recupera la imagen anterior al descartar un reemplazo dañado',async()=>{
+    const u=userEvent.setup();
+    const revoke=vi.fn();
+    vi.stubGlobal('URL',class extends URL {
+      static createObjectURL(file){return 'blob:'+file.name}
+      static revokeObjectURL=revoke;
+    });
+    vi.stubGlobal('Image',class {
+      naturalWidth=400;
+      naturalHeight=800;
+      set src(url){if(url.endsWith('rota.jpg')) this.onerror(); else this.onload()}
+    });
+    render(<AdModal ad={{id:3,title:'Original',image_url:'/original.jpg'}} onClose={()=>{}} saved={()=>{}}/>);
+    const input=screen.getByLabelText(/Reemplazar imagen/);
+    await u.upload(input,new File(['foto'],'retrato.jpg',{type:'image/jpeg'}));
+    expect(screen.getByText('retrato.jpg')).toBeTruthy();
+    expect(screen.getByAltText('Vista previa de la imagen seleccionada').src).toBe('blob:retrato.jpg');
+    await u.upload(input,new File(['dañada'],'rota.jpg',{type:'image/jpeg'}));
+    expect(screen.getByRole('alert').textContent).toMatch(/dañada/);
+    expect(screen.getByAltText('Imagen actual del anuncio').src).toContain('/original.jpg');
+    expect(screen.getByRole('button',{name:'Guardar anuncio'}).disabled).toBe(true);
+    await u.click(screen.getByRole('button',{name:'Descartar archivo'}));
+    expect(screen.getByRole('button',{name:'Guardar anuncio'}).disabled).toBe(false);
+    expect(revoke).toHaveBeenCalledWith('blob:retrato.jpg');
+    expect(requests).toHaveLength(0);
+  });
+
+  it('permite sustituir anuncios desde preparación y actualiza la vista conjunta en la misma sesión',async()=>{
+    const u=userEvent.setup();
+    state.user=user;
+    state.ads=[{id:1,title:'Retrato',image_url:'/retrato.jpg',active:true},
+      {id:2,title:'Paisaje',image_url:'/paisaje.jpg',active:true},
+      {id:3,title:'Texto',active:true}];
+    state.studies=[{id:15,name:'Prueba',status:'draft',slots:[{...state.ads[0],ad_id:1,position:0}]}];
+    location.hash='exhibit/15';
+    render(<App/>);
+    await u.click(await screen.findByRole('button',{name:'Modificar anuncios'}));
+    const dialog=within(screen.getByRole('dialog'));
+    const paisaje=dialog.getByRole('button',{name:'Paisaje'});
+    expect(paisaje.querySelector('img').src).toContain('/paisaje.jpg');
+    expect(dialog.getByRole('button',{name:'Texto'}).querySelector('img')).toBeNull();
+    await u.click(paisaje);
+    const preview=dialog.getByLabelText('Vista previa de la distribución');
+    expect([...preview.querySelectorAll('img')].map(img=>img.alt)).toEqual(['Retrato','Paisaje']);
+    await u.click(dialog.getByRole('button',{name:/^Retrato/}));
+    expect([...preview.querySelectorAll('img')].map(img=>img.alt)).toEqual(['Paisaje']);
+    await u.click(dialog.getByRole('button',{name:'Guardar selección'}));
+    await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByAltText('Paisaje')).toBeTruthy();
+    expect(location.hash).toBe('#exhibit/15');
+    expect(JSON.parse(requests.find(r=>r.path==='/studies/15/ads').options.body)).toEqual({ad_ids:[2]});
   });
 
   it('explica la ausencia de resultados sin mostrar métricas inventadas',async()=>{

@@ -5,9 +5,11 @@ import { EMO, REASONS, secs } from "../config";
 import { Brand, Button, ErrorBox } from "../components/ui";
 import { studyColumns } from "../layout";
 import { AdGrid } from "../components/AdGrid";
+import { StudyAdEditor } from "./Sessions";
 
-function Exhibition({ id, onExit, onBack }) {
+function Exhibition({ id, ads, onAdSaved, onStudySaved, onExit, onBack }) {
   const [study, setStudy] = useState(null),
+    [editingAds, setEditingAds] = useState(false),
     [error, setError] = useState(""),
     [stream, setStream] = useState(null),
     [captureReady, setCaptureReady] = useState(false),
@@ -145,6 +147,7 @@ function Exhibition({ id, onExit, onBack }) {
         height: window.innerHeight,
         camera_id: camera,
       });
+      setStudy((current) => ({ ...current, status: "calibrating" }));
       setPhase("calibrating");
       for (let i = 0; i < 9; i++) {
         if (cancel.current || !alive.current) return;
@@ -282,6 +285,14 @@ function Exhibition({ id, onExit, onBack }) {
     );
   return (
     <div className="exhibition" ref={display}>
+      {editingAds && (
+        <StudyAdEditor study={study} ads={ads} onAdSaved={onAdSaved}
+          onClose={() => setEditingAds(false)} onSave={(updated) => {
+            setStudy(updated);
+            onStudySaved(updated);
+            setEditingAds(false);
+          }} />
+      )}
       <canvas ref={canvas} hidden />
       <video
         className="capturevideo"
@@ -452,6 +463,12 @@ function Exhibition({ id, onExit, onBack }) {
               <div className="setuppreview">
                 <AdGrid slots={study.slots} columns={studyColumns(study)} />
               </div>
+              {phase === "setup" && study.status === "draft" &&
+                study.slots.every((slot) => ads.some((ad) => ad.id === slot.ad_id)) && (
+                <Button className="secondary" disabled={busy} onClick={() => setEditingAds(true)}>
+                  Modificar anuncios
+                </Button>
+              )}
               <div className="visionstatus">
                 <span
                   className={"online " + (!status?.mediapipe ? "warning" : "")}

@@ -97,6 +97,9 @@ function App() {
     return (
       <Exhibition
         id={Number(route.split("/")[1])}
+        ads={ads}
+        onAdSaved={(ad) => setAds((list) => [ad, ...list.filter((item) => item.id !== ad.id)])}
+        onStudySaved={(study) => setStudies((list) => list.map((item) => item.id === study.id ? study : item))}
         onExit={async (id) => {
           await refresh();
           go("results/" + id);
