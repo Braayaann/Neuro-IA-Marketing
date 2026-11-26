@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { gridStyle } from "../layout";
 import { AdVisual } from "./ui";
 
 function Heatmap({ points, children }) {
@@ -43,9 +44,9 @@ function Heatmap({ points, children }) {
   );
 }
 
-function AdGrid({ slots }) {
+function AdGrid({ slots, columns }) {
   return (
-    <div className={"adgrid n" + slots.length}>
+    <div className="adgrid" style={gridStyle(slots.length, columns)}>
       {slots.map((a) => (
         <div key={a.id} className="adcell">
           <AdVisual ad={a} />

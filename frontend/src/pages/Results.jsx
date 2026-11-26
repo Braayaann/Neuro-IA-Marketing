@@ -11,6 +11,7 @@ import {
 import { api } from "../api";
 import { EMO, REASONS, secs } from "../config";
 import { Badge, Empty, Stat, ErrorBox } from "../components/ui";
+import { gridStyle, studyColumns } from "../layout";
 import { GazePoints } from "../components/GazePoints";
 import { OverviewSummary } from "../components/OverviewSummary";
 import { ResultBars, QuadrantSummary } from "../components/ResultBars";
@@ -30,6 +31,7 @@ function Results({ id, go }) {
   }, [id]);
   if (error) return <ErrorBox message={error} />;
   if (!data) return <p>Cargando resultados…</p>;
+  const columns = studyColumns(data.study);
   const selected = data.ads.find((ad) => String(ad.id) === selectedAd);
   return (
     <>
@@ -124,20 +126,14 @@ function Results({ id, go }) {
               />
             ) : (
               <>
-                <div className={"gaze-overview n" + data.study.slots.length}>
+                <div className="gaze-overview" style={gridStyle(data.study.slots.length, columns)}>
                   {data.ads.map((ad) => (
                     <div
                       key={ad.id}
                       className="gaze-overview-cell"
                       style={{
-                        gridColumn:
-                          data.study.slots.length === 1
-                            ? 1
-                            : (ad.position % 2) + 1,
-                        gridRow:
-                          data.study.slots.length > 2
-                            ? Math.floor(ad.position / 2) + 1
-                            : 1,
+                        gridColumn: ad.position % columns + 1,
+                        gridRow: Math.floor(ad.position / columns) + 1,
                       }}
                     >
                       <GazePoints
@@ -149,7 +145,7 @@ function Results({ id, go }) {
                       <span className="gaze-overview-title">{ad.title}</span>
                     </div>
                   ))}
-                  {data.study.slots.length === 3 && (
+                  {data.study.slots.length === 3 && columns === 2 && (
                     <div className="gaze-unused">Área sin anuncio</div>
                   )}
                 </div>

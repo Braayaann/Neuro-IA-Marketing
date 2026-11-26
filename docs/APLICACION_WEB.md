@@ -39,8 +39,8 @@ pide permiso de cámara al navegador. Usa localhost o HTTPS.
   desactivarse a sí mismo ni quitarse su rol.
 - Cada usuario gestiona sus anuncios: texto, fondo, imagen JPG/PNG/WEBP y archivo
   reversible. Las imágenes se validan y recodifican; no se aceptan SVG ni HTML.
-- Sesiones de 1 a 4 anuncios; dos en columnas, tres o cuatro en cuadrícula 2×2.
-  Con tres, el cuarto cuadrante no suma muestras. El orden de selección fija las posiciones.
+- Sesiones de 1 a 4 anuncios; hasta tres en una fila y cuatro en cuadrícula 2×2.
+  Las sesiones anteriores conservan su distribución, incluida la cuadrícula 2×2 con tres anuncios. El orden de selección fija las posiciones.
 - Una persona por sesión; cámara seleccionable, vista previa, pantalla completa.
 - Calibración de 9 objetivos con ambos iris (468 y 473 de FaceMesh), sus
   posiciones relativas a cada ojo y el ajuste lineal del prototipo.

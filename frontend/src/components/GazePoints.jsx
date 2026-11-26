@@ -1,4 +1,5 @@
 import React from "react";
+import { studyColumns } from "../layout";
 import { AdVisual } from "./ui";
 
 export function GazePoints({
@@ -7,8 +8,8 @@ export function GazePoints({
   compact = false,
   showQuadrants = false,
 }) {
-  const columns = study.slots.length === 1 ? 1 : 2;
-  const rows = study.slots.length > 2 ? 2 : 1;
+  const columns = studyColumns(study);
+  const rows = Math.ceil(study.slots.length / columns);
   const points = (ad.points || [])
     .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
     .map((p) => ({

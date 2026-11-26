@@ -1,8 +1,38 @@
 import io
+import pytest
 from datetime import timedelta
 from sqlalchemy import select
 from backend.models import Study, Observation, User, db, utcnow
 from conftest import login, make_study, FakeVision, calibrate, jpeg
+
+
+@pytest.mark.parametrize('legacy', [False, True], ids=['fila-nueva', 'cuadricula-anterior'])
+def test_three_ads_use_saved_layout_for_capture_and_results(app, client, legacy):
+    headers = login(client)
+    ids = [client.post('/api/ads', json={'title': title}, headers=headers).json['id']
+           for title in ['A', 'B', 'C']]
+    order = [ids[2], ids[0], ids[1]]
+    study = client.post('/api/studies', json={'name': 'Tres', 'ad_ids': order}, headers=headers).json
+    assert study['layout_columns'] == 3
+    assert [slot['ad_id'] for slot in study['slots']] == order
+    sid = study['id']
+    if legacy:
+        with app.app_context():
+            db.session.get(Study, sid).layout_columns = 2
+            db.session.commit()
+    vision = FakeVision()
+    app.extensions['vision'] = vision
+    calibrate(client, headers, sid, vision)
+    assert client.post(f'/api/studies/{sid}/start', headers=headers).status_code == 200
+    for seq in range(2):
+        vision.iris = [.9, .8]
+        response = client.post(f'/api/studies/{sid}/observations', headers=headers, data={
+            'seq': str(seq), 'elapsed': str(seq * .5), 'frame': (jpeg(), 'f.jpg')})
+        assert response.status_code == 200
+        assert response.json['ad_id'] == (None if legacy else study['slots'][2]['id'])
+    result = client.get(f'/api/studies/{sid}/results').json
+    assert result['study']['layout_columns'] == (2 if legacy else 3)
+    assert result['ads'][2]['quadrants'][3]['seconds'] == (0 if legacy else .5)
 
 
 def test_auth_csrf_and_roles(client):

@@ -1169,19 +1169,7 @@ td .textbtn {
   background: #eff1e9;
   gap: 2px;
 }
-.adgrid.n1 {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-}
-.adgrid.n2 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
-}
-.adgrid.n3,
-.adgrid.n4 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
+.selection-preview { aspect-ratio: 16 / 9; overflow: hidden; margin: 12px 0; }
 .adcell {
   min-width: 0;
   min-height: 0;
@@ -1260,7 +1248,7 @@ td .textbtn {
   margin-top: 16px;
   background: #eff1e9;
 }
-.gaze-overview.n1 { grid-template-columns: 1fr; }
+
 .gaze-overview-cell { position: relative; min-width: 0; }
 .gaze-overview .gaze-points { margin-top: 0; }
 .gaze-overview-title {

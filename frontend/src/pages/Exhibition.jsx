@@ -3,6 +3,7 @@ import { Camera, Check, Play, ShieldCheck, Square, Target } from "lucide-react";
 import { api, post } from "../api";
 import { EMO, REASONS, secs } from "../config";
 import { Brand, Button, ErrorBox } from "../components/ui";
+import { studyColumns } from "../layout";
 import { AdGrid } from "../components/AdGrid";
 
 function Exhibition({ id, onExit, onBack }) {
@@ -350,7 +351,7 @@ function Exhibition({ id, onExit, onBack }) {
         </div>
       ) : phase === "running" ? (
         <div className="exhibitstage">
-          <AdGrid slots={study.slots} />
+          <AdGrid slots={study.slots} columns={studyColumns(study)} />
           <div className="livepill">
             <span className={"online " + (!sample?.valid ? "warning" : "")} />
             {sample?.valid
@@ -449,7 +450,7 @@ function Exhibition({ id, onExit, onBack }) {
                 </span>
               </div>
               <div className="setuppreview">
-                <AdGrid slots={study.slots} />
+                <AdGrid slots={study.slots} columns={studyColumns(study)} />
               </div>
               <div className="visionstatus">
                 <span

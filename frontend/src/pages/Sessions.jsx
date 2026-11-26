@@ -7,6 +7,7 @@ import {
   Monitor,
   Plus,
 } from "lucide-react";
+import { AdGrid } from "../components/AdGrid";
 import { post } from "../api";
 import { fmtDate } from "../config";
 import { Badge, Button, Modal, Empty, ErrorBox } from "../components/ui";
@@ -177,9 +178,15 @@ function StudyModal({ ads, onClose, created, createAd }) {
               </button>
             ))}
           </div>
+          {selected.length > 0 && (
+            <div className="selection-preview" aria-label="Vista previa de la distribución">
+              <AdGrid columns={selected.length === 4 ? 2 : selected.length}
+                slots={selected.map((id, position) => ({ ...ads.find((ad) => ad.id === id), position }))} />
+            </div>
+          )}
           <p className="small muted">
             El orden de selección define las posiciones: de izquierda a derecha
-            y de arriba abajo. Con tres anuncios queda un espacio vacío.
+            y de arriba abajo.
           </p>
           <label className="checkbox">
             <input type="checkbox" name="emotions" defaultChecked />

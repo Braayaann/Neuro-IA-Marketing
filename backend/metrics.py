@@ -11,15 +11,20 @@ QUADRANTS = (
 )
 
 
-def quadrant_times(observations, slots):
+def cell_position(x, y, columns, rows):
+    column = min(int(x * columns), columns - 1)
+    row = min(int(y * rows), rows - 1)
+    return row * columns + column
+
+
+def quadrant_times(observations, slots, columns):
     """Recibe todas las muestras en orden de secuencia, incluidas las inválidas.
 
     Las coordenadas están normalizadas respecto al área de exhibición completa.
-    Cada anuncio ocupa una celda: una pantalla, dos columnas o una grilla 2x2.
+    Cada anuncio ocupa una celda de la distribución guardada.
     Los puntos sobre la mitad pertenecen a la derecha o a la parte inferior.
     """
-    columns = 1 if len(slots) == 1 else 2
-    rows = 2 if len(slots) > 2 else 1
+    rows = math.ceil(len(slots) / columns)
     positions = {slot.id: slot.position for slot in slots}
     totals = {slot.id: [0.0] * 4 for slot in slots}
     previous = None
@@ -31,9 +36,9 @@ def quadrant_times(observations, slots):
                 and observation.x is not None and observation.y is not None
                 and math.isfinite(observation.x) and math.isfinite(observation.y)
                 and 0 <= observation.x <= 1 and 0 <= observation.y <= 1):
-            column = min(int(observation.x * columns), columns - 1)
-            row = min(int(observation.y * rows), rows - 1)
-            if row * columns + column == positions[observation.study_ad_id]:
+            position = cell_position(observation.x, observation.y, columns, rows)
+            if position == positions[observation.study_ad_id]:
+                row, column = divmod(position, columns)
                 local_x = observation.x * columns - column
                 local_y = observation.y * rows - row
                 zone = int(local_y >= 0.5) * 2 + int(local_x >= 0.5)

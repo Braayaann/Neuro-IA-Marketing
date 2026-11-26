@@ -55,6 +55,22 @@ function results(valid = true) {
   };
 }
 
+it("ubica el tercer anuncio en la tercera columna y conserva su punto al seleccionarlo", async () => {
+  const data = results();
+  data.study.layout_columns = 3;
+  data.ads[2].points = [{ x: 0.75, y: 0.8 }];
+  api.mockResolvedValue(data);
+  const { container } = render(<Results id={1} go={vi.fn()} />);
+  const selector = await screen.findByLabelText("Vista del mapa");
+  const third = container.querySelectorAll(".gaze-overview-cell")[2];
+  expect(third.style.gridColumn).toBe("3");
+  expect(third.style.gridRow).toBe("1");
+  expect(screen.queryByText("Área sin anuncio")).toBeNull();
+  expect(third.querySelector("circle").getAttribute("cx")).toBe("25%");
+  await userEvent.selectOptions(selector, "3");
+  expect(container.querySelector(".gaze-points circle").getAttribute("cy")).toBe("80%");
+});
+
 it("muestra los tres anuncios y cambia los gráficos y puntos al seleccionar uno", async () => {
   api.mockResolvedValue(results());
   const user = userEvent.setup();

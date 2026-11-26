@@ -11,10 +11,9 @@ def sample(elapsed, x=0.1, y=0.1, ad_id=1, valid=True):
     return SimpleNamespace(elapsed=elapsed, x=x, y=y, study_ad_id=ad_id, valid=valid)
 
 
-@pytest.mark.parametrize('count', [1, 2, 3, 4])
-def test_quadrants_are_relative_to_each_ad(count):
+@pytest.mark.parametrize(('count', 'columns', 'rows'), [(1, 1, 1), (2, 2, 1), (3, 3, 1), (3, 2, 2), (4, 2, 2)])
+def test_quadrants_are_relative_to_each_ad(count, columns, rows):
     slots = [SimpleNamespace(id=i + 1, position=i) for i in range(count)]
-    columns, rows = (1 if count == 1 else 2), (2 if count > 2 else 1)
     observations = []
     elapsed = 0
     for slot in slots:
@@ -24,7 +23,7 @@ def test_quadrants_are_relative_to_each_ad(count):
             for _ in range(2):
                 observations.append(sample(elapsed, screen_x, screen_y, slot.id))
                 elapsed += 0.5
-    assert quadrant_times(observations, slots) == {
+    assert quadrant_times(observations, slots, columns) == {
         slot.id: [0.5, 0.5, 0.5, 0.5] for slot in slots
     }
 
@@ -38,13 +37,13 @@ def test_quadrants_are_relative_to_each_ad(count):
 ])
 def test_invalid_sample_interrupts_interval(middle):
     observations = [sample(0), middle, sample(1), sample(1.5)]
-    assert quadrant_times(observations, [SimpleNamespace(id=1, position=0)])[1] == [0.5, 0, 0, 0]
+    assert quadrant_times(observations, [SimpleNamespace(id=1, position=0)], 1)[1] == [0.5, 0, 0, 0]
 
 
 @pytest.mark.parametrize(('interval', 'expected'), [(0, 0), (-0.5, 0), (1.5, 1.5), (1.5001, 0)])
 def test_interval_limits(interval, expected):
     observations = [sample(0), sample(interval)]
-    assert quadrant_times(observations, [SimpleNamespace(id=1, position=0)])[1] == [expected, 0, 0, 0]
+    assert quadrant_times(observations, [SimpleNamespace(id=1, position=0)], 1)[1] == [expected, 0, 0, 0]
 
 
 def test_midlines_and_screen_edges():
@@ -53,7 +52,7 @@ def test_midlines_and_screen_edges():
                     sample(1, 0.5, 0), sample(1.5, 0.5, 0),
                     sample(2, 0, 0.5), sample(2.5, 0, 0.5),
                     sample(3, 0.5, 0.5), sample(3.5, 1, 1)]
-    assert quadrant_times(observations, slots)[1] == [0.5] * 4
+    assert quadrant_times(observations, slots, 1)[1] == [0.5] * 4
 
 
 def test_results_derive_quadrants_from_saved_observations(app, client):

@@ -46,6 +46,7 @@ class Study(db.Model):
     owner_id = db.Column(db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(140), nullable=False)
     status = db.Column(db.String(16), nullable=False, default='draft')
+    layout_columns = db.Column(db.Integer)
     camera_id = db.Column(db.String(300), default='')
     screen_width = db.Column(db.Integer)
     screen_height = db.Column(db.Integer)
@@ -60,8 +61,12 @@ class Study(db.Model):
     calibration = db.relationship('Calibration', uselist=False, lazy='selectin')
     __table_args__ = (CheckConstraint("status IN ('draft','calibrating','ready','running','completed','cancelled')"),)
 
+    @property
+    def columns(self):
+        return self.layout_columns or min(len(self.slots), 2) or 1
+
     def public(self):
-        return dict(id=self.id, name=self.name, status=self.status, with_emotions=self.with_emotions,
+        return dict(id=self.id, layout_columns=self.columns, name=self.name, status=self.status, with_emotions=self.with_emotions,
                     created_at=self.created_at.isoformat(),
                     started_at=self.started_at.isoformat() if self.started_at else None,
                     ended_at=self.ended_at.isoformat() if self.ended_at else None,

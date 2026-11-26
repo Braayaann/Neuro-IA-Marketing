@@ -22,7 +22,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .models import Ad, Calibration, Observation, Study, StudyAd, User, db, utcnow
-from .metrics import QUADRANTS, quadrant_times
+from .metrics import QUADRANTS, cell_position, quadrant_times
 from .vision import Vision
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -301,7 +301,8 @@ def create_app(config=None):
         emotions = data.get('with_emotions', True)
         if type(emotions) is not bool:
             problem('Modo de expresiones inválido.')
-        s = Study(owner_id=g.user.id, name=string(data, 'name', 140), with_emotions=emotions)
+        s = Study(owner_id=g.user.id, name=string(data, 'name', 140), with_emotions=emotions,
+                  layout_columns=len(ids) if len(ids) <= 3 else 2)
         db.session.add(s)
         db.session.flush()
         for position, aid in enumerate(ids):
@@ -448,9 +449,7 @@ def create_app(config=None):
             xy = np.r_[1., (np.array(result['iris'])-c.mean)/c.scale] @ np.array(c.coefficients)
             if np.isfinite(xy).all() and ((xy >= 0) & (xy <= 1)).all():
                 x, y = map(float, xy)
-                n = len(s.slots)
-                position = 0 if n == 1 else min(int(x*2), 1) if n == 2 else min(int(y*2), 1)*2+min(int(x*2), 1)
-                # Con tres anuncios, el cuarto cuadrante queda fuera de contenido.
+                position = cell_position(x, y, s.columns, math.ceil(len(s.slots) / s.columns))
                 slot = next((a for a in s.slots if a.position == position), None)
                 if slot is None:
                     reason = 'sin_anuncio'
@@ -483,7 +482,7 @@ def create_app(config=None):
     def result(s):
         observations = list(db.session.scalars(select(Observation).where(Observation.study_id == s.id).order_by(Observation.seq)))
         total = sum(o.estimated_seconds for o in observations)
-        zones = quadrant_times(observations, s.slots)
+        zones = quadrant_times(observations, s.slots, s.columns)
         ads = []
         for a in s.slots:
             rows = [o for o in observations if o.study_ad_id == a.id]
